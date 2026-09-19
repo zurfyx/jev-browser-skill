@@ -41,7 +41,8 @@ popup; tell them to click Allow. It waits up to two minutes. If they want Jev in
 browser and it is not being used, they tick "Allow remote debugging for this browser instance"
 at chrome://inspect/#remote-debugging once.
 
-Never pass passwords or secrets through `--text`; password fields are never observed anyway.
+- `--secret`: a password. It is typed only into password fields, never sent to Jev, never
+  printed. Never pass a password through `--text`.
 
 ## Reading the result
 

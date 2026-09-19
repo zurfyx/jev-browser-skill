@@ -7,15 +7,19 @@
 
 <a href="docs/demo.mp4"><img src="docs/demo.gif" alt="Jev searching Hacker News for Jev and opening the top thread, at 1× speed" width="100%" /></a>
 
-*Hacker News, one goal, 1× speed: type in the search box, submit, open the first result's comments. Four decisions, five seconds.* [Watch the MP4](docs/demo.mp4)
+*Hacker News at 1× speed, one goal: log in, search for "Jev", open the first result's comments. Eight decisions, eight seconds.* [Watch the MP4](docs/demo.mp4)
 
 Jev is TypeSafe's "System One" model: a single forward pass that returns a typed choice with a calibrated probability, instead of generating tokens. This skill puts it in the hot path of a browser agent. Your coding agent writes the goal once; **Jev makes every navigation decision**.
 
 ```text
- 1  TYPE        textbox "q" ← "Jev"                         p=0.51   465ms  +0.9s
- 2  ENTER                                                   p=0.91   304ms  +1.8s
- 3  CLICK       link "500 comments"                         p=0.85   312ms  +3.3s
- 4  DONE                                                    p=0.87   299ms  +4.8s
+ 1  CLICK       link "login"                                p=0.60   355ms  +0.8s
+ 2  TYPE        textbox "username:" ← "zurfyx"             p=0.99   331ms  +1.7s
+ 3  TYPE        password "password:" ← "••••••"            p=0.90   163ms  +2.5s
+ 4  CLICK       button "login"                             p=0.89   155ms  +3.3s
+ 5  TYPE        textbox "q" ← "Jev"                        p=0.97   494ms  +4.6s
+ 6  ENTER                                                  p=0.92   288ms  +5.5s
+ 7  CLICK       link "500 comments"                        p=0.66   297ms  +6.6s
+ 8  DONE                                                   p=0.66   313ms  +8.2s
 ```
 
 Measured on a MacBook with a warm Jev window, wall clock from launch to `DONE`:
@@ -24,7 +28,7 @@ Measured on a MacBook with a warm Jev window, wall clock from launch to `DONE`:
 | --- | --- | --- | --- |
 | Wikipedia: search and open an article | 2 | 3.4s | 1.0s |
 | Selenium web form: two fields, a dropdown, a checkbox, submit | 5 | 5.1s | 1.4s |
-| Hacker News: search for Jev, open the top thread's comments (the video) | 3 | 5.0s | 1.4s |
+| Hacker News: log in, search for Jev, open the top thread's comments (the video) | 7 | 8.4s | 2.4s |
 
 The rest is the page itself loading and rendering.
 
@@ -110,7 +114,9 @@ Only operations that are possible on the current page are offered. There is no s
 > [!WARNING]
 > Jev answers a choice question with at most **255 options**, so this skill offers the first **250 controls** on a page and skips the rest with a warning in the step log. Pages with more, like a large product grid, need a first question that narrows to a region, which is what [jev-ultrafast](https://github.com/browser-use/jev-ultrafast) does and this reference deliberately does not.
 
-**Jev chooses, it never generates.** The strings to type come from your agent as `--text` values, and Jev decides which value goes in which field. Every answer is an index into a table the script built from the page, validated before anything runs. Model output never becomes a selector, a coordinate or JavaScript, and password fields are never observed.
+**Jev chooses, it never generates.** The strings to type come from your agent as `--text` values, and Jev decides which value goes in which field. Every answer is an index into a table the script built from the page, validated before anything runs. Model output never becomes a selector, a coordinate or JavaScript.
+
+**Passwords never reach Jev.** A `--secret` value is typed only into password fields. Jev sees that a password field exists and whether it is filled, never the value, and the log shows dots.
 
 ## Run it without an agent
 
@@ -126,6 +132,7 @@ node ~/.claude/skills/jev-browser/scripts/jev.mjs \
 | `--url` | Where to start |
 | `--goal` | The whole task in a sentence or two, including what "done" looks like |
 | `--text` | A string Jev may type. Repeat for several values |
+| `--secret` | A string typed only into password fields, never sent to Jev or printed |
 | `--screenshot out.png` | Save the final page |
 | `--browser` | `auto` (default), `yours`, `own`, or `host:port` |
 | `--headless` | No window |
