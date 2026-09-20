@@ -1,4 +1,4 @@
-# Jev Browser Skill ⚡
+# Jev Browser Skill
 
 > [!IMPORTANT]
 > **This is a reference implementation, built to be read.** Three short files, six operations, no dependencies, and a step-by-step explainer site: [jev-browser.vercel.app](https://jev-browser.vercel.app). It works on ordinary pages and stops exactly where the interesting limits are. For the complete, production-grade version of the same idea, with a live inspector, region narrowing, stale-page guards and a text-generating helper model, see [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), which this skill follows. To wire Jev into your own project, point your coding agent at `scripts/core.mjs`, that repo, and this README.
