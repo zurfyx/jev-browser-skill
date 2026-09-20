@@ -268,6 +268,24 @@ $("key").value = localStorage.getItem("typesafe_key") || "";
 $("ask").onclick = askLive; $("execute").onclick = executeLive; $("reset").onclick = liveReset;
 $("autoplay").onclick = () => { if (live?.auto) { live.auto = false; } else autoplay(); };
 
+// Theme: an explicit choice wins and persists; otherwise follow the system.
+const themeBtn = $("theme");
+const syncTheme = () => {
+  const explicit = document.documentElement.dataset.theme;
+  const dark = explicit ? explicit === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  themeBtn.setAttribute("aria-label", `Switch to ${dark ? "light" : "dark"} theme`);
+};
+themeBtn.onclick = () => {
+  const explicit = document.documentElement.dataset.theme;
+  const dark = explicit ? explicit === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  const next = dark ? "light" : "dark";
+  document.documentElement.dataset.theme = next;
+  try { localStorage.setItem("theme", next); } catch {}
+  syncTheme();
+};
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncTheme);
+syncTheme();
+
 // Startup: always fetch the default trace so replay is ready, then show the mode from the URL.
 await loadTrace($("trace-select").value);
 if (location.hash === "#live") setMode("live");
