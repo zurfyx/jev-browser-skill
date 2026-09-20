@@ -91,7 +91,7 @@ const SNAPSHOT = `(() => {
     if (!visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
     const r = e.getBoundingClientRect(), kind = role(e);
     if (!kind || !r.width || !r.height) continue;
-    const item = { node: identity(e), role: kind, label: name(e) || kind };
+    const item = { node: identity(e), role: kind, label: name(e) || kind, rect: { x: r.x, y: r.y, w: r.width, h: r.height } };
     if (['checkbox', 'radio'].includes(e.type)) item.checked = e.checked;
     for (const key of ['checked', 'selected', 'expanded']) {
       const value = e.getAttribute('aria-' + key);
@@ -119,7 +119,8 @@ const SNAPSHOT = `(() => {
     range.selectNodeContents(node); const r = range.getBoundingClientRect();
     if (r.width && r.height) { words.push(value); length += value.length; }
   }
-  return { url: location.href, title: document.title, text: words.join('\\n').slice(0, 5000), elements, omitted };
+  return { url: location.href, title: document.title, text: words.join('\\n').slice(0, 5000), elements, omitted,
+    viewport: { w: innerWidth, h: innerHeight, x: scrollX, y: scrollY } };
 })()`;
 
 // Runs inside the page just before input: re-check the observed node, bring it on screen, hit-test its centre.
@@ -209,7 +210,7 @@ export function buildRequest({ goal, page, texts = [], secret = "", history = []
   }
   const state = {
     page: { url: page.url, title: page.title, text: page.text },
-    elements: page.elements.map(({ node, op, options, ...rest }) =>
+    elements: page.elements.map(({ node, op, options, rect, ...rest }) => // node ids and geometry stay with the code
       ({ ...rest, operation: op === "SECRET" ? "TYPE" : op, ...(options ? { options: options.map(o => o.label) } : {}) })),
     text_values: texts,
     recent_actions: history.slice(-10).map(({ operation, target, text, url, page_changed }) => ({ operation, target, text, url, page_changed })),

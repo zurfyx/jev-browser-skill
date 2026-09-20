@@ -1,3 +1,5 @@
 .env
 *.png
 .DS_Store
+.vercel
+.env*

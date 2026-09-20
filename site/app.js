@@ -1,0 +1,222 @@
+// The explainer. Replay mode steps through a --trace file. Live mode runs the same loop as the
+// skill inside a sandboxed iframe, using scripts/core.mjs unchanged and /api/jev for the request.
+import { SNAPSHOT, LOCATE, OPERATIONS, decide, fingerprint } from "/scripts/core.mjs";
+import { samples } from "/site/samples.js";
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const PRICE_PER_TOKEN = 0.042 / 1e6; // Jev list price for input; output is free
+const money = n => n < 0.01 ? `$${n.toFixed(5)}` : `$${n.toFixed(3)}`;
+
+let mode = "replay";
+let steps = [], current = -1, trace = null;      // replay
+let live = null;                                 // live state: { page, decision, history, iframe }
+
+// ---------- rendering one step (shared by both modes) ----------
+
+function renderStep(step, { liveFrame = false } = {}) {
+  const { page, calls, decision } = step;
+  const body = calls[0].body, answers = calls[0].answers;
+  const chosenIndex = decision.target?.match(/^\[(\d+)\]/)?.[1];
+
+  // page column
+  $("page-url").textContent = page.url;
+  if (!liveFrame) {
+    $("frame").innerHTML = page.screenshot ? `<img src="${page.screenshot}" alt="">` : `<div class="note">no screenshot in this trace</div>`;
+    if (page.viewport) $("frame").style.aspectRatio = `${page.viewport.w} / ${page.viewport.h}`;
+  }
+  document.querySelectorAll("#frame .mark").forEach(m => m.remove());
+  const chosen = page.elements.find(e => e.index === chosenIndex);
+  if (chosen?.rect && page.viewport) {
+    const box = $("frame").getBoundingClientRect();
+    const sx = box.width / page.viewport.w, sy = box.height / page.viewport.h;
+    const mark = document.createElement("div");
+    mark.className = "mark";
+    mark.style.cssText = `left:${chosen.rect.x * sx - 3}px;top:${chosen.rect.y * sy - 3}px;width:${chosen.rect.w * sx + 2}px;height:${chosen.rect.h * sy + 2}px`;
+    mark.innerHTML = `<span>Jev · ${esc(decision.operation)} · ${Math.round(decision.p * 100)}%</span>`;
+    $("frame").append(mark);
+  }
+  const belowFold = chosen?.rect && page.viewport && (chosen.rect.y > page.viewport.h || chosen.rect.y + chosen.rect.h < 0);
+  $("page-note").textContent = (belowFold ? "The target is outside the screenshot; the code scrolled it into view before acting. " : "") + (page.omitted ? `${page.omitted} controls beyond the first 250 were not offered (Jev takes at most 255 options per question).` : `${page.elements.length} controls observed, ${page.text.length} characters of visible text.`);
+
+  // code column
+  $("table-count").textContent = `${page.elements.length} rows`;
+  const headUsed = `${decision.operation.toLowerCase()}_target`;
+  const candidates = body.questions[headUsed]?.criteria || {};
+  $("table").innerHTML = page.elements.map(e => {
+    const cls = e.index === chosenIndex ? "chosen" : (e.index in candidates ? "hot" : "");
+    const value = e.value !== undefined && e.value !== "" ? `<span class="val">= ${esc(JSON.stringify(e.value))}</span>` : "";
+    const ops = e.op === "SECRET" ? "TYPE (secret)" : e.op === "SELECT" ? `SELECT ×${e.options?.length ?? 0}` : e.op === "TYPE" ? "TYPE · CLICK" : e.op;
+    return `<div class="row ${cls}"><span class="idx">[${e.index}]</span><span>${esc(e.role)}</span><span>${esc(e.label)} ${value}</span><span class="ops">${ops}</span></div>`;
+  }).join("");
+  $("table").querySelector(".row.chosen")?.scrollIntoView({ block: "center" });
+  const st = body.state;
+  $("extras").innerHTML = [
+    `goal: <code>${esc(st.page ? body.questions.operation.instructions.goal : "")}</code>`,
+    `text_values: <code>${esc(JSON.stringify(st.text_values))}</code>${step.secretOffered ? " + a secret, offered for password fields only, never in the request" : ""}`,
+    `visible text: <code>${esc(st.page.text.slice(0, 140).replace(/\n/g, " ⏎ "))}${st.page.text.length > 140 ? "…" : ""}</code>`,
+    `recent_actions (${st.recent_actions.length}): <code>${esc(st.recent_actions.slice(-3).map(a => `${a.operation} ${a.target ?? ""}`).join(" → ") || "none yet")}</code>`,
+    `questions asked: <code>${Object.keys(body.questions).join(", ")}</code>`,
+  ].join("<br>");
+  $("request").textContent = JSON.stringify(body, null, 2);
+
+  // jev column
+  const heads = Object.entries(answers).map(([name, a]) => {
+    const used = name === "operation" || name === headUsed;
+    const criteria = body.questions[name]?.criteria || {};
+    const sorted = Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]);
+    const shown = sorted.slice(0, 8), rest = sorted.length - shown.length;
+    const bars = shown.map(([k, p], i) => {
+      const label = name === "operation" ? k : `[${k}] ${criteria[k]?.element?.replace(/^\[\d+\]\s*/, "") ?? ""}${criteria[k]?.option ? ` → ${criteria[k].option}` : ""}`;
+      return `<div class="bar ${i === 0 ? "top" : ""}"><span class="lab" title="${esc(label)}">${esc(label)}</span><span class="track"><span class="fill" style="width:${Math.max(1, p * 100)}%"></span></span><span class="p">${p.toFixed(2)}</span></div>`;
+    }).join("") + (rest > 0 ? `<div class="bar"><span class="lab muted">… and ${rest} more, all below ${Math.max(...sorted.slice(8).map(x => x[1])).toFixed(2)}</span><span></span><span></span></div>` : "");
+    const tag = name === "operation" ? "decides which head to read" : used ? "read, because the operation matched" : "discarded";
+    return `<div class="q ${used ? "used" : "discarded"}"><div class="qname"><span>${esc(name)}</span><span class="tag">${tag}</span></div>${bars}</div>`;
+  });
+  if (calls[1]) {
+    const a = calls[1].answers.value, values = calls[1].body.questions.value.criteria;
+    heads.push(`<div class="q used"><div class="qname"><span>value</span><span class="tag">second request: which text value belongs in the chosen field</span></div>${
+      Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]).map(([k, p], i) => `<div class="bar ${i === 0 ? "top" : ""}"><span class="lab">${esc(values[k])}</span><span class="track"><span class="fill" style="width:${Math.max(1, p * 100)}%"></span></span><span class="p">${p.toFixed(2)}</span></div>`).join("")}</div>`);
+  }
+  $("answers").innerHTML = heads.join("");
+  const what = decision.target ? `${decision.operation} → ${decision.target}${decision.option ? ` → "${decision.option}"` : ""}${decision.text ? ` ← "${decision.text}"` : ""}` : decision.operation;
+  const why = decision.operation in { DONE: 1, BLOCKED: 1 } ? OPERATIONS[decision.operation]
+    : decision.operation === "ENTER" ? "no target needed: Enter goes to the field just typed into"
+    : (headUsed in answers ? `read ${headUsed} only` : `only one ${decision.operation} candidate, so no ${headUsed} question was needed`) +
+      `; ${Object.keys(answers).filter(n => n !== "operation" && n !== headUsed).join(", ") || "nothing"} discarded`;
+  $("decision").innerHTML = `${esc(what)}<small>${esc(why)}</small>`;
+  const tokens = calls.reduce((n, c) => n + (c.usage?.input_tokens ?? 0), 0);
+  $("meta").textContent = `${decision.ms} ms in Jev` + (tokens ? ` · ${tokens.toLocaleString()} input tokens · ${money(tokens * PRICE_PER_TOKEN)}` : "") + (step.elapsed_ms != null ? ` · ${(step.elapsed_ms / 1000).toFixed(1)}s into the run` : "");
+  $("answers-raw").textContent = JSON.stringify(calls.map(c => c.answers), null, 2);
+}
+
+function renderSteps(list, active, onPick) {
+  $("steps").innerHTML = list.map((s, i) => `<button class="step ${i === active ? "active" : ""}" data-i="${i}">${i + 1} ${esc(s.decision.operation)}</button>`).join("");
+  $("steps").querySelectorAll(".step").forEach(b => (b.onclick = () => onPick(Number(b.dataset.i))));
+}
+
+// ---------- replay ----------
+
+async function loadTrace(source) {
+  trace = typeof source === "string" ? await (await fetch(source)).json() : source;
+  steps = trace.steps.map(s => ({ ...s, secretOffered: trace.secret }));
+  show(0);
+}
+function show(i) {
+  current = Math.max(0, Math.min(steps.length - 1, i));
+  renderStep(steps[current]);
+  renderSteps(steps, current, show);
+  $("prev").disabled = current === 0; $("next").disabled = current === steps.length - 1;
+  const s = steps[current];
+  $("status").textContent = `Step ${current + 1} of ${steps.length} · goal: ${trace.goal}` + (current === steps.length - 1 && trace.result ? ` · finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it in Jev` : s.executed === false ? " · not executed: the page changed before the action, observed again" : "");
+}
+
+// ---------- live ----------
+
+function liveFrame(html, allowScripts) {
+  const iframe = document.createElement("iframe");
+  iframe.sandbox = "allow-same-origin allow-forms" + (allowScripts ? " allow-scripts" : "");
+  iframe.srcdoc = html;
+  $("frame").innerHTML = ""; $("frame").append(iframe);
+  return new Promise(resolve => (iframe.onload = () => resolve(iframe)));
+}
+async function liveReset() {
+  const key = $("sample-select").value, sample = samples[key];
+  const html = key === "custom" ? ($("custom-html")?.value || "<p>Paste some HTML above.</p>") : sample.html;
+  const iframe = await liveFrame(html, key !== "custom");
+  live = { iframe, history: [], steps: [], page: null, decision: null, started: performance.now() };
+  ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps"].forEach(id => ($(id).innerHTML = ""));
+  document.querySelectorAll("#frame .mark").forEach(m => m.remove());
+  $("page-url").textContent = sample.title; $("page-note").textContent = "";
+  $("ask").disabled = false; $("execute").disabled = true;
+  $("status").textContent = "Press “ask Jev”: the page is observed, one request is sent with your key, and the answer is shown before anything runs.";
+}
+const inPage = (expr) => live.iframe.contentWindow.eval(expr);
+async function askLive() {
+  const key = $("key").value.trim();
+  if (!key) return ($("status").textContent = "A TypeSafe key is needed for live mode. It stays in this browser and is sent only with your requests.");
+  localStorage.setItem("typesafe_key", key);
+  const texts = $("texts").value.split(",").map(s => s.trim()).filter(Boolean), secret = $("secret").value, goal = $("goal").value.trim();
+  if (!goal) return ($("status").textContent = "Write a goal first.");
+  $("ask").disabled = true; $("status").textContent = "Observing the page and asking Jev…";
+  try {
+    const page = inPage(SNAPSHOT);
+    if (live.history.length) live.history.at(-1).page_changed = live.history.at(-1).fingerprint !== fingerprint(page);
+    const ask = async body => {
+      const started = performance.now();
+      const res = await fetch("/api/jev", { method: "POST", headers: { "content-type": "application/json", "x-typesafe-key": key }, body: JSON.stringify(body) });
+      if (!res.ok) throw new Error(`Jev returned HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
+      const { answers, usage } = await res.json();
+      return { answers, usage, ms: Math.round(performance.now() - started) };
+    };
+    const decision = await decide(ask, { goal, page, texts, secret, history: live.history });
+    const { operation, e, option, text } = decision;
+    const step = { elapsed_ms: Math.round(performance.now() - live.started), page, calls: decision.calls, secretOffered: Boolean(secret),
+      decision: { operation, target: e && `[${e.index}] ${e.role} "${e.label}"`, option: option?.label, text: decision.secret ? "••••••" : text, p: decision.p, ms: decision.ms }, raw: decision };
+    live.steps.push(step); live.page = page; live.decision = decision;
+    renderStep(step, { liveFrame: true });
+    renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
+    if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return; }
+    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet. Press “execute” to let the code perform it.`;
+  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; }
+}
+async function executeLive() {
+  const d = live.decision, w = live.iframe.contentWindow;
+  $("execute").disabled = true;
+  try {
+    if (d.e) {
+      const point = inPage(`${LOCATE}(${d.e.node}, ${JSON.stringify(`Jev · ${d.operation} · ${Math.round(d.p * 100)}%`)})`);
+      if (!point) throw new Error("The element moved or disappeared since the observation. Ask again.");
+      await new Promise(r => setTimeout(r, 400));
+      const node = w.__jev.nodes.get(d.e.node);
+      if (d.operation === "SELECT") { node.value = d.option.value; node.dispatchEvent(new w.Event("input", { bubbles: true })); node.dispatchEvent(new w.Event("change", { bubbles: true })); }
+      else if (d.operation === "TYPE") { node.focus(); if ("value" in node) node.value = d.text; else node.textContent = d.text; node.dispatchEvent(new w.Event("input", { bubbles: true })); node.dispatchEvent(new w.Event("change", { bubbles: true })); live.lastTyped = node; }
+      else node.click();
+    } else if (d.operation === "ENTER") {
+      const node = live.lastTyped; node?.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); node?.form?.requestSubmit();
+    }
+    live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, fingerprint: fingerprint(live.page) });
+    await new Promise(r => setTimeout(r, 500));
+    $("ask").disabled = false; $("status").textContent = "Executed by the code. Press “ask Jev” for the next step.";
+  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; }
+}
+
+// ---------- wiring ----------
+
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll(".mode").forEach(b => b.classList.toggle("active", b.dataset.mode === m));
+  document.querySelectorAll(".only-replay").forEach(el => (el.hidden = m !== "replay"));
+  document.querySelectorAll(".only-live").forEach(el => (el.hidden = m !== "live"));
+  $("prev").hidden = $("next").hidden = m !== "replay";
+  location.hash = m === "live" ? "live" : "";
+  if (m === "live") liveReset(); else show(Math.max(0, current));
+}
+document.querySelectorAll(".mode").forEach(b => (b.onclick = () => setMode(b.dataset.mode)));
+$("prev").onclick = () => show(current - 1); $("next").onclick = () => show(current + 1);
+document.addEventListener("keydown", e => { if (mode === "replay" && e.key === "ArrowRight") show(current + 1); if (mode === "replay" && e.key === "ArrowLeft") show(current - 1); });
+$("copy-request").onclick = e => { e.preventDefault(); navigator.clipboard.writeText($("request").textContent); e.target.textContent = "copied"; setTimeout(() => (e.target.textContent = "copy"), 1200); };
+$("trace-select").onchange = e => loadTrace(e.target.value);
+const drop = $("drop");
+drop.ondragover = e => { e.preventDefault(); drop.classList.add("over"); };
+drop.ondragleave = () => drop.classList.remove("over");
+drop.ondrop = async e => { e.preventDefault(); drop.classList.remove("over"); const f = e.dataTransfer.files[0]; if (f) loadTrace(JSON.parse(await f.text())); };
+document.body.ondragover = e => e.preventDefault(); document.body.ondrop = drop.ondrop;
+
+$("sample-select").innerHTML = Object.entries(samples).map(([k, s]) => `<option value="${k}">${esc(s.title)}</option>`).join("");
+function fillSample() {
+  const s = samples[$("sample-select").value];
+  $("goal").value = s.goal; $("texts").value = s.texts; $("secret").value = s.secret;
+  let ta = $("custom-html");
+  if ($("sample-select").value === "custom") {
+    if (!ta) { ta = document.createElement("textarea"); ta.id = "custom-html"; ta.rows = 6; ta.placeholder = "<form>…</form>"; ta.style.cssText = "width:100%;font:12px ui-monospace,monospace"; $("controls").append(ta); ta.onchange = liveReset; }
+  } else ta?.remove();
+}
+$("sample-select").onchange = () => { fillSample(); if (mode === "live") liveReset(); };
+fillSample();
+$("key").value = localStorage.getItem("typesafe_key") || "";
+$("ask").onclick = askLive; $("execute").onclick = executeLive; $("reset").onclick = liveReset;
+
+// Startup: always fetch the default trace so replay is ready, then show the mode from the URL.
+await loadTrace($("trace-select").value);
+if (location.hash === "#live") setMode("live");
