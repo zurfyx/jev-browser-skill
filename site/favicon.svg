@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- A ranked distribution with the top option taken: what Jev returns. -->
+  <rect x="3" y="4"    width="18" height="4.4" rx="2.2" fill="#f2530a"/>
+  <rect x="3" y="10.3" width="11" height="4.4" rx="2.2" fill="#8a8e99"/>
+  <rect x="3" y="16.6" width="6"  height="4.4" rx="2.2" fill="#c8ccd2"/>
+</svg>

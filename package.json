@@ -1,0 +1,10 @@
+{
+  "name": "jev-browser-skill",
+  "private": true,
+  "type": "module",
+  "description": "Let Jev drive your browser. A reference skill for Claude Code and Codex.",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\""
+  }
+}
