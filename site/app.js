@@ -220,8 +220,13 @@ async function autoplay() {
     $("autoplay").textContent = "▶ autoplay";
     for (const b of ["ask", "autoplay", "reset"]) $(b).disabled = false;
     if (done && n) {
-      const jevMs = live.steps.slice(-n).reduce((t, s) => t + (s.decision.ms || 0), 0);
-      $("status").innerHTML = $("status").textContent + ` — ${n} decisions, <b>${(jevMs / 1000).toFixed(1)}s of it inside Jev</b>.`;
+      const run = live.steps.slice(-(n + 1)); // the n executed decisions plus the final DONE/BLOCKED
+      const jevMs = run.reduce((t, s) => t + (s.decision.ms || 0), 0);
+      const tokens = run.reduce((t, s) => t + s.calls.reduce((c, x) => c + (x.usage?.input_tokens ?? 0), 0), 0);
+      const total = ((performance.now() - started) / 1000).toFixed(1);
+      $("status").innerHTML = $("status").textContent +
+        ` — ${run.length} decisions in ${total}s, <b>${(jevMs / 1000).toFixed(1)}s of it inside Jev</b>` +
+        (tokens ? ` · ${tokens.toLocaleString()} tokens · <b>${money(tokens * PRICE_PER_TOKEN)}</b>` : "") + ".";
     }
   }
 }
