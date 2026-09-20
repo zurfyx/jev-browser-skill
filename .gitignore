@@ -3,3 +3,9 @@
 .DS_Store
 .vercel
 .env*
+
+# agent tooling, machine-local
+.claude/
+.codex/
+.cursor/
+.agents/
