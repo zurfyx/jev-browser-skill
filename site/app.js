@@ -4,6 +4,9 @@ import { SNAPSHOT, LOCATE, OPERATIONS, decide, fingerprint } from "/scripts/core
 import { samples } from "/site/samples.js";
 
 const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+let pulseTimer;
+function pulse() { const b = $("board"); b.classList.remove("pulse"); void b.offsetWidth; b.classList.add("pulse"); clearTimeout(pulseTimer); pulseTimer = setTimeout(() => b.classList.remove("pulse"), 1400); }
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const PRICE_PER_TOKEN = 0.042 / 1e6; // Jev list price for input; output is free
 const money = n => n < 0.01 ? `$${n.toFixed(5)}` : `$${n.toFixed(3)}`;
@@ -20,11 +23,12 @@ function renderStep(step, { liveFrame = false } = {}) {
   const chosenIndex = decision.target?.match(/^\[(\d+)\]/)?.[1];
 
   // page column
-  $("page-url").textContent = page.url;
+  $("page-url").textContent = page.url.startsWith("blob:") ? `sample page ${new URL(page.url).hash}` : page.url;
   if (!liveFrame) {
-    $("frame").innerHTML = page.screenshot ? `<img src="${page.screenshot}" alt="">` : `<div class="note">no screenshot in this trace</div>`;
+    $("frame").innerHTML = page.screenshot ? `<img src="${page.screenshot}" alt="the page at this step">` : `<div class="empty">no screenshot in this trace</div>`;
     if (page.viewport) $("frame").style.aspectRatio = `${page.viewport.w} / ${page.viewport.h}`;
   }
+  pulse();
   document.querySelectorAll("#frame .mark").forEach(m => m.remove());
   const chosen = page.elements.find(e => e.index === chosenIndex);
   if (chosen?.rect && page.viewport) {
@@ -71,11 +75,11 @@ function renderStep(step, { liveFrame = false } = {}) {
       return `<div class="bar ${i === 0 ? "top" : ""}"><span class="lab" title="${esc(label)}">${esc(label)}</span><span class="track"><span class="fill" style="width:${Math.max(1, p * 100)}%"></span></span><span class="p">${p.toFixed(2)}</span></div>`;
     }).join("") + (rest > 0 ? `<div class="bar"><span class="lab muted">… and ${rest} more, all below ${Math.max(...sorted.slice(8).map(x => x[1])).toFixed(2)}</span><span></span><span></span></div>` : "");
     const tag = name === "operation" ? "decides which head to read" : used ? "read, because the operation matched" : "discarded";
-    return `<div class="q ${used ? "used" : "discarded"}"><div class="qname"><span>${esc(name)}</span><span class="tag">${tag}</span></div>${bars}</div>`;
+    return `<div class="q ${used ? "used" : "discarded"}"><div class="qname"><span>${esc(name)}</span><span class="tag2">${tag}</span></div>${bars}</div>`;
   });
   if (calls[1]) {
     const a = calls[1].answers.value, values = calls[1].body.questions.value.criteria;
-    heads.push(`<div class="q used"><div class="qname"><span>value</span><span class="tag">second request: which text value belongs in the chosen field</span></div>${
+    heads.push(`<div class="q used"><div class="qname"><span>value</span><span class="tag2">second request: which text value belongs in the chosen field</span></div>${
       Object.entries(a.probabilities).sort((x, y) => y[1] - x[1]).map(([k, p], i) => `<div class="bar ${i === 0 ? "top" : ""}"><span class="lab">${esc(values[k])}</span><span class="track"><span class="fill" style="width:${Math.max(1, p * 100)}%"></span></span><span class="p">${p.toFixed(2)}</span></div>`).join("")}</div>`);
   }
   $("answers").innerHTML = heads.join("");
@@ -113,10 +117,14 @@ function show(i) {
 
 // ---------- live ----------
 
+let liveBlobUrl;
 function liveFrame(html, allowScripts) {
   const iframe = document.createElement("iframe");
   iframe.sandbox = "allow-same-origin allow-forms" + (allowScripts ? " allow-scripts" : "");
-  iframe.srcdoc = html;
+  // A blob URL (not srcdoc) so the sample's own #hash links resolve to the frame, never the parent site.
+  if (liveBlobUrl) URL.revokeObjectURL(liveBlobUrl);
+  liveBlobUrl = URL.createObjectURL(new Blob([html], { type: "text/html" }));
+  iframe.src = liveBlobUrl;
   $("frame").innerHTML = ""; $("frame").append(iframe);
   return new Promise(resolve => (iframe.onload = () => resolve(iframe)));
 }
@@ -128,16 +136,16 @@ async function liveReset() {
   ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps"].forEach(id => ($(id).innerHTML = ""));
   document.querySelectorAll("#frame .mark").forEach(m => m.remove());
   $("page-url").textContent = sample.title; $("page-note").textContent = "";
-  $("ask").disabled = false; $("execute").disabled = true;
+  live.auto = false; $("autoplay").textContent = "▶ autoplay"; $("autoplay").disabled = false; $("ask").disabled = false; $("execute").disabled = true;
   $("status").textContent = "Press “ask Jev”: the page is observed, one request is sent with your key, and the answer is shown before anything runs.";
 }
 const inPage = (expr) => live.iframe.contentWindow.eval(expr);
 async function askLive() {
   const key = $("key").value.trim();
-  if (!key) return ($("status").textContent = "A TypeSafe key is needed for live mode. It stays in this browser and is sent only with your requests.");
+  if (!key) { $("status").textContent = "A TypeSafe key is needed for live mode. It stays in this browser and is sent only with your requests."; return "need-key"; }
   localStorage.setItem("typesafe_key", key);
   const texts = $("texts").value.split(",").map(s => s.trim()).filter(Boolean), secret = $("secret").value, goal = $("goal").value.trim();
-  if (!goal) return ($("status").textContent = "Write a goal first.");
+  if (!goal) { $("status").textContent = "Write a goal first."; return "need-goal"; }
   $("ask").disabled = true; $("status").textContent = "Observing the page and asking Jev…";
   try {
     const page = inPage(SNAPSHOT);
@@ -147,7 +155,9 @@ async function askLive() {
       const res = await fetch("/api/jev", { method: "POST", headers: { "content-type": "application/json", "x-typesafe-key": key }, body: JSON.stringify(body) });
       if (!res.ok) throw new Error(`Jev returned HTTP ${res.status}: ${(await res.text()).slice(0, 200)}`);
       const { answers, usage } = await res.json();
-      return { answers, usage, ms: Math.round(performance.now() - started) };
+      // the proxy reports the TypeSafe round trip; that is Jev's time, without the hop to Vercel
+      const upstream = Number(res.headers.get("x-upstream-ms"));
+      return { answers, usage, ms: upstream || Math.round(performance.now() - started) };
     };
     const decision = await decide(ask, { goal, page, texts, secret, history: live.history });
     const { operation, e, option, text } = decision;
@@ -156,9 +166,10 @@ async function askLive() {
     live.steps.push(step); live.page = page; live.decision = decision;
     renderStep(step, { liveFrame: true });
     renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
-    if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return; }
-    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet. Press “execute” to let the code perform it.`;
-  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; }
+    if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return operation; }
+    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet — press execute.`;
+    return "pending";
+  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
 }
 async function executeLive() {
   const d = live.decision, w = live.iframe.contentWindow;
@@ -177,8 +188,42 @@ async function executeLive() {
     }
     live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, fingerprint: fingerprint(live.page) });
     await new Promise(r => setTimeout(r, 500));
-    $("ask").disabled = false; $("status").textContent = "Executed by the code. Press “ask Jev” for the next step.";
-  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; }
+    $("ask").disabled = false; $("status").textContent = "Executed by the code. Ask Jev for the next step.";
+    return "ok";
+  } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
+}
+
+// Run ask → execute to the end so the speed is visible. Each Jev call is a few hundred ms.
+async function autoplay() {
+  if (!$("key").value.trim()) { $("status").textContent = "Enter a TypeSafe key first, then autoplay."; return; }
+  live.auto = true;
+  for (const b of ["ask", "execute", "autoplay", "reset"]) $(b).disabled = true;
+  $("autoplay").textContent = "■ stop"; $("autoplay").disabled = false;
+  const started = performance.now();
+  let n = 0;
+  try {
+    while (live.auto) {
+      const dot = '<span class="live-dot"></span>';
+      $("status").innerHTML = dot + `autoplaying… step ${n + 1}`;
+      const r = await askLive();
+      if (r !== "pending") break;              // DONE, BLOCKED, or error
+      n++;
+      await sleep(450);                         // let the highlight land
+      if (!live.auto) break;
+      const e = await executeLive();
+      if (e !== "ok") break;
+      await sleep(320);
+    }
+  } finally {
+    const done = live.auto;
+    live.auto = false;
+    $("autoplay").textContent = "▶ autoplay";
+    for (const b of ["ask", "autoplay", "reset"]) $(b).disabled = false;
+    if (done && n) {
+      const jevMs = live.steps.slice(-n).reduce((t, s) => t + (s.decision.ms || 0), 0);
+      $("status").innerHTML = $("status").textContent + ` — ${n} decisions, <b>${(jevMs / 1000).toFixed(1)}s of it inside Jev</b>.`;
+    }
+  }
 }
 
 // ---------- wiring ----------
@@ -216,6 +261,7 @@ $("sample-select").onchange = () => { fillSample(); if (mode === "live") liveRes
 fillSample();
 $("key").value = localStorage.getItem("typesafe_key") || "";
 $("ask").onclick = askLive; $("execute").onclick = executeLive; $("reset").onclick = liveReset;
+$("autoplay").onclick = () => { if (live?.auto) { live.auto = false; } else autoplay(); };
 
 // Startup: always fetch the default trace so replay is ready, then show the mode from the URL.
 await loadTrace($("trace-select").value);
