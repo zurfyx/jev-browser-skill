@@ -252,7 +252,7 @@ export async function decide(ask, options) {
   const reply = await ask(request.body);
   const decision = readDecision(reply.answers, request);
   decision.ms = reply.ms;
-  decision.calls = [{ body: request.body, answers: reply.answers, ms: reply.ms }];
+  decision.calls = [{ body: request.body, answers: reply.answers, usage: reply.usage, ms: reply.ms }];
   if (decision.operation === "TYPE" && decision.e.op === "SECRET") {
     decision.text = options.secret; // the secret never enters a Jev request, a log, or a trace
     decision.secret = true;
@@ -263,7 +263,7 @@ export async function decide(ask, options) {
       const answer = await ask(body);
       decision.text = values[pick(answer.answers.value, values).choice];
       decision.ms += answer.ms;
-      decision.calls.push({ body, answers: answer.answers, ms: answer.ms });
+      decision.calls.push({ body, answers: answer.answers, usage: answer.usage, ms: answer.ms });
     }
   }
   return decision;
