@@ -96,13 +96,13 @@ You need [Node 22+](https://nodejs.org), Chrome (or Edge, Brave, Chromium) and a
 **Claude Code**
 
 ```bash
-git clone https://github.com/zurfyx/jev-browser-skill ~/.claude/skills/jev-browser
+git clone https://github.com/zurfyx/jev-browser-skill-demo ~/.claude/skills/jev-browser
 ```
 
 **Codex**
 
 ```bash
-git clone https://github.com/zurfyx/jev-browser-skill ~/.codex/skills/jev-browser
+git clone https://github.com/zurfyx/jev-browser-skill-demo ~/.codex/skills/jev-browser
 ```
 
 **Then add your key**
