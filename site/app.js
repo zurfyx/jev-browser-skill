@@ -53,7 +53,7 @@ function renderStep(step, { liveFrame = false } = {}) {
     const ops = e.op === "SECRET" ? "TYPE (secret)" : e.op === "SELECT" ? `SELECT ×${e.options?.length ?? 0}` : e.op === "TYPE" ? "TYPE · CLICK" : e.op;
     return `<div class="row ${cls}"><span class="idx">[${e.index}]</span><span>${esc(e.role)}</span><span>${esc(e.label)} ${value}</span><span class="ops">${ops}</span></div>`;
   }).join("");
-  $("table").querySelector(".row.chosen")?.scrollIntoView({ block: "center" });
+  { const t = $("table"), r = t.querySelector(".row.chosen"); if (r) t.scrollTop = r.offsetTop - t.clientHeight / 2 + r.offsetHeight / 2; } // scroll the table, never the page
   const st = body.state;
   $("extras").innerHTML = [
     `goal: <code>${esc(st.page ? body.questions.operation.instructions.goal : "")}</code>`,

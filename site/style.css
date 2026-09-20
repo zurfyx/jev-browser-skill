@@ -49,8 +49,16 @@ h1, h2, h3 { letter-spacing: -0.02em; margin: 0; }
 h1 { font-size: clamp(1.55rem, 1.2rem + 1.4vw, 2.1rem); font-weight: 600; line-height: 1.05; }
 .wrap { max-width: var(--wrap); margin: 0 auto; padding-inline: clamp(16px, 3vw, 34px); }
 
+/* ---------- github corner ---------- */
+.github-corner { position: absolute; top: 0; right: 0; z-index: 10; color: var(--ground); display: block; line-height: 0; }
+.github-corner svg { fill: var(--ink); display: block; }
+.github-corner:hover .octo-arm { animation: octocat-wave .56s ease-in-out; }
+@keyframes octocat-wave { 0%,100% { transform: rotate(0); } 20%,60% { transform: rotate(-25deg); } 40%,80% { transform: rotate(10deg); } }
+@media (max-width: 600px) { .github-corner:hover .octo-arm { animation: none; } .github-corner .octo-arm { animation: octocat-wave .56s ease-in-out; } }
+@media (prefers-reduced-motion: reduce) { .github-corner .octo-arm { animation: none !important; } }
+
 /* ---------- header ---------- */
-.top { padding-top: clamp(20px, 3vw, 34px); padding-bottom: 14px; display: flex; gap: 28px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
+.top { padding-top: clamp(20px, 3vw, 34px); padding-bottom: 14px; padding-right: 64px; display: flex; gap: 28px; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; }
 .brand { max-width: 640px; }
 .lede { margin: 10px 0 0; color: var(--ink-2); font-size: 1.02rem; line-height: 1.5; }
 .lede strong { color: var(--ink); font-weight: 560; }
@@ -68,9 +76,10 @@ h1 { font-size: clamp(1.55rem, 1.2rem + 1.4vw, 2.1rem); font-weight: 600; line-h
 /* ---------- controls ---------- */
 .controls { display: flex; flex-wrap: wrap; gap: 10px 18px; align-items: center; padding: 12px 14px; margin-top: 6px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-1); }
 .controls > div { display: contents; }
-.controls label { display: inline-flex; gap: 8px; align-items: center; font-size: 12px; font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.controls label { display: inline-flex; gap: 8px; align-items: center; max-width: 100%; min-width: 0; font-size: 12px; font-weight: 500; color: var(--ink-3); text-transform: uppercase; letter-spacing: .06em; }
+.controls label > select, .controls label > input { flex: 1 1 auto; min-width: 0; max-width: 100%; }
 .controls input, .controls select { font: 400 13.5px var(--sans); letter-spacing: -0.01em; color: var(--ink); padding: 7px 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--sunk); transition: border-color .15s, box-shadow .15s, background .15s; }
-.controls input { min-width: 190px; }
+.controls input { width: 200px; }
 .controls input::placeholder { color: var(--ink-3); }
 .controls input:focus, .controls select:focus { outline: none; background: var(--surface); border-color: var(--accent); box-shadow: 0 0 0 3px var(--jev-fill); }
 .controls select { appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' stroke='%238a8e99' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
@@ -189,9 +198,11 @@ button.btn.ghost:hover:not(:disabled) { color: var(--ink); background: var(--sur
 
 [hidden] { display: none !important; }
 @media (max-width: 1080px) {
+  .controls label { width: 100%; }
+  .controls input { width: auto; }
   .board { grid-template-columns: 1fr; }
   .col { min-height: 0; }
   .grid { grid-template-columns: 1fr; }
-  .top { flex-direction: column; gap: 16px; }
+  .top { flex-direction: column; gap: 16px; padding-right: 0; padding-top: 60px; }
   .stepbar { position: static; background: none; }
 }
