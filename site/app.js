@@ -41,7 +41,7 @@ function renderStep(step, { liveFrame = false } = {}) {
     $("frame").append(mark);
   }
   const belowFold = chosen?.rect && page.viewport && (chosen.rect.y > page.viewport.h || chosen.rect.y + chosen.rect.h < 0);
-  $("page-note").textContent = (belowFold ? "The target is outside the screenshot; the code scrolled it into view before acting. " : "") + (page.omitted ? `${page.omitted} controls beyond the first 250 were not offered (Jev takes at most 255 options per question).` : `${page.elements.length} controls observed, ${page.text.length} characters of visible text.`);
+  $("page-note").textContent = (belowFold ? "The target is outside the screenshot; the skill scrolled it into view before acting. " : "") + (page.omitted ? `${page.omitted} controls beyond the first 250 were not offered (Jev takes at most 255 options per question).` : `${page.elements.length} controls observed, ${page.text.length} characters of visible text.`);
 
   // code column
   $("table-count").textContent = `${page.elements.length} rows`;
@@ -166,7 +166,7 @@ async function askLive() {
     renderStep(step, { liveFrame: true });
     renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
     if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return operation; }
-    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet — press execute.`;
+    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet — press execute to let the skill do it.`;
     return "pending";
   } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
 }
@@ -187,7 +187,7 @@ async function executeLive() {
     }
     live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, fingerprint: fingerprint(live.page) });
     await new Promise(r => setTimeout(r, 500));
-    $("ask").disabled = false; $("status").textContent = "Executed by the code. Ask Jev for the next step.";
+    $("ask").disabled = false; $("status").textContent = "Executed by the skill. Ask Jev for the next step.";
     return "ok";
   } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
 }

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How Jev drives a browser</title>
-<meta name="description" content="Step through a real run of the Jev browser skill: what the code built from the page, what Jev was asked, what it answered, and what ran.">
+<meta name="description" content="Step through a real run of the Jev browser skill: what the skill listed from the page, what Jev was asked, what it answered, and what ran.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
 <script>(()=>{const t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
@@ -19,7 +19,7 @@
 <header class="top">
   <div class="brand">
     <h1>How Jev drives a browser</h1>
-    <p class="lede"><strong>Nothing is scripted per site.</strong> Every step, the code lists whatever controls are on the page right now; Jev decides which to click, type into or select, and when the goal is done. You give it only the goal and the strings to type — Jev chooses where they go, it just can't make them up.</p>
+    <p class="lede">The skill reads the page and lists everything it could click, type into or select. Jev picks one and says how sure it is. The skill does it, then asks again with the new page, until Jev says the goal is done.</p>
     <p class="sub">Step through a real run below, or run one live. The logic is <a href="/scripts/core.mjs"><code>scripts/core.mjs</code></a>, the same file the <a href="https://github.com/zurfyx/jev-browser-skill">skill</a> runs.</p>
   </div>
   <div class="header-tools">
@@ -59,7 +59,7 @@
   </section>
 
   <section class="col code-col">
-    <h2><span class="tag">code</span> what the code listed</h2>
+    <h2><span class="tag">skill</span> what the skill listed</h2>
     <div class="col-body">
       <div class="sub-h">element table <span class="muted" id="table-count"></span></div>
       <div class="table" id="table"></div>
@@ -101,9 +101,9 @@
     <div><h3>One request, several questions</h3><p>Each request asks for the operation and, speculatively, a target under every operation. Only the head matching the chosen operation is read: two decisions, one round trip.</p></div>
     <div><h3>Jev only sees the table</h3><p>Not the DOM, not a screenshot. When the login fields were labelled <code>acct</code> and <code>pw</code>, Jev answered <code>BLOCKED 0.31</code>; better labels fixed it.</p></div>
     <div><h3>Jev never writes text</h3><p>You supply the strings; Jev picks which one goes where. A secret goes only into password fields and never into a request.</p></div>
-    <div><h3>Every answer is validated</h3><p>An answer is a key into the table the code built. Anything outside it throws, and nothing runs.</p></div>
+    <div><h3>Every answer is validated</h3><p>An answer is a key into the table the skill built. Anything outside it throws, and nothing runs.</p></div>
     <div><h3>255 options per question</h3><p>So the first 250 controls are offered, with a warning when some were skipped. Hacker News' front page has 227; a product grid needs a narrowing question first.</p></div>
-    <div><h3>Stateless, and cheap</h3><p>Each step is an independent request whose only memory is the <code>recent_actions</code> the code sends. A few thousand input tokens; output is free.</p></div>
+    <div><h3>Stateless, and cheap</h3><p>Each step is an independent request whose only memory is the <code>recent_actions</code> the skill sends. A few thousand input tokens; output is free.</p></div>
   </div>
   <p class="colophon">© 2026 Gerard Rovira · MIT license · code on <a href="https://github.com/zurfyx/jev-browser-skill">GitHub</a> · Jev is by <a href="https://typesafe.ai">TypeSafe</a></p>
 </section>
