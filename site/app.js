@@ -116,7 +116,8 @@ function show(i) {
   const note = trace.notes?.[current];
   const tail = current === steps.length - 1 && trace.result ? ` Finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev.`
     : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";
-  $("status").innerHTML = `<span class="n">${current + 1} / ${steps.length}</span>` + esc(note ?? "") + esc(tail);
+  $("counter").textContent = `${current + 1} / ${steps.length}`;
+  $("status").textContent = (note ?? "") + tail;
 }
 
 // ---------- live ----------
@@ -139,7 +140,7 @@ async function liveReset() {
   live = { iframe, history: [], steps: [], page: null, decision: null, started: performance.now() };
   ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps"].forEach(id => ($(id).innerHTML = ""));
   document.querySelectorAll("#frame .mark").forEach(m => m.remove());
-  $("page-url").textContent = sample.title; $("page-note").textContent = "";
+  $("page-url").textContent = sample.title; $("page-note").textContent = ""; $("counter").textContent = "";
   live.auto = false; $("autoplay").textContent = "▶ autoplay"; $("autoplay").disabled = false; $("ask").disabled = false; $("execute").disabled = true;
   $("status").textContent = "Press “ask Jev”: the page is observed, one request is sent with your key, and the answer is shown before anything runs.";
 }

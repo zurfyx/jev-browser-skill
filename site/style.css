@@ -224,7 +224,8 @@ button.btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
 button.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--ink-2); }
 button.btn.ghost:hover:not(:disabled) { color: var(--ink); background: var(--surface); border-color: var(--line); }
 .status { color: var(--ink); font-size: 14.5px; line-height: 1.5; margin: 0 0 12px; max-width: 78ch; }
-.status .n { font: 500 11px var(--mono); color: var(--ink-3); margin-right: 8px; vertical-align: 1px; }
+.counter { font: 500 12px var(--mono); color: var(--ink-3); margin-left: 4px; }
+.counter:empty { display: none; }
 .status:empty { display: none; }
 .status b { color: var(--ink); font-weight: 600; }
 .status .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 99px; background: var(--accent); margin-right: 7px; vertical-align: middle; animation: blink 1s steps(2) infinite; }
