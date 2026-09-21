@@ -36,7 +36,7 @@ Here is the real third step of the video, on the Hacker News login page, after t
     "type": "choice",
     "criteria": { "CLICK": "Click a link, button, …", "TYPE": "Type one of the provided text values …",
                   "ENTER": "Press Enter …", "DONE": "Every requirement …", "BLOCKED": "No offered operation …" },
-    "instructions": { "goal": "Log in to Hacker News as user zurfyx. Then …", "rules": "…" }
+    "instructions": { "goal": "Log in to Hacker News as zurfyx, then search for Jev and open the top result's comments.", "rules": "…" }
   },
   "click_target": { "type": "choice", "criteria": { "3": { "element": "[3] button \"login\"" }, "4": { … }, … } },
   "type_target":  { "type": "choice", "criteria": { "1": { "element": "[1] textbox \"username:\"", "current_value": "zurfyx" },
@@ -59,14 +59,14 @@ Only operations that are possible right now are offered, and each target head li
 **5. Execute.** [`browser.mjs`](scripts/browser.mjs) resolves index 2 back to the exact DOM node it observed, scrolls it into view, and types with real keyboard events. Then the loop observes again.
 
 ```text
- 1  CLICK       link "login"                                p=0.60   355ms  +0.8s
- 2  TYPE        textbox "username:" ← "zurfyx"             p=0.99   331ms  +1.7s
- 3  TYPE        password "password:" ← "••••••"            p=0.90   163ms  +2.5s
- 4  CLICK       button "login"                             p=0.89   155ms  +3.3s
- 5  TYPE        textbox "q" ← "Jev"                        p=0.97   494ms  +4.6s
- 6  ENTER                                                  p=0.92   288ms  +5.5s
- 7  CLICK       link "500 comments"                        p=0.66   297ms  +6.6s
- 8  DONE                                                   p=0.66   313ms  +8.2s
+ 1  CLICK       link "login"                                p=0.56   348ms  +0.9s
+ 2  TYPE        textbox "username:" ← "zurfyx"             p=0.99   378ms  +2.2s
+ 3  TYPE        password "password:" ← "••••••"            p=0.93   158ms  +3.0s
+ 4  CLICK       button "login"                             p=0.92   140ms  +3.9s
+ 5  TYPE        textbox "q" ← "Jev"                        p=0.96   532ms  +5.4s
+ 6  ENTER                                                  p=0.90   290ms  +6.4s
+ 7  CLICK       link "510 comments"                        p=0.78   292ms  +7.6s
+ 8  DONE                                                   p=0.70   300ms  +9.1s
 ```
 
 ## What the limits teach
@@ -85,7 +85,7 @@ Measured on a MacBook with a warm Jev window, wall clock from launch to `DONE`:
 | --- | --- | --- | --- |
 | Wikipedia: search and open an article | 2 | 3.4s | 1.0s |
 | Selenium web form: two fields, a dropdown, a checkbox, submit | 5 | 5.1s | 1.4s |
-| Hacker News: log in, search for Jev, open the top thread's comments (the video) | 7 | 8.4s | 2.4s |
+| Hacker News: log in, search for Jev, open the top thread's comments (the video) | 7 | 9.3s | 2.4s |
 
 The rest is the page itself loading and rendering.
 
