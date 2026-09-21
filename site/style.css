@@ -223,7 +223,9 @@ button.btn.primary:hover:not(:disabled) { background: var(--accent-ink); }
 button.btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
 button.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--ink-2); }
 button.btn.ghost:hover:not(:disabled) { color: var(--ink); background: var(--surface); border-color: var(--line); }
-.status { color: var(--ink); font-size: 14.5px; line-height: 1.5; margin: 0 0 12px; max-width: 78ch; }
+/* the caption for the board: what is happening in the step you are looking at */
+.board .status { grid-column: 1 / -1; margin: 0; padding: 4px 2px 6px; font-size: 14.5px; line-height: 1.5; color: var(--ink); max-width: 80ch; text-wrap: pretty; font-variant-numeric: tabular-nums; }
+.board .status::before { content: ""; display: block; width: 28px; height: 2px; background: var(--jev); border-radius: 1px; margin-bottom: 9px; }
 .counter { font: 500 12px var(--mono); color: var(--ink-3); margin-left: 4px; }
 .counter:empty { display: none; }
 .status:empty { display: none; }
