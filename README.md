@@ -173,4 +173,6 @@ docs/                 the video, the diagram (editable .excalidraw + embedded-sc
 
 ## Credits
 
-The action-space design follows [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast). Jev is built by [TypeSafe](https://typesafe.ai); their own [agent skill](https://docs.typesafe.ai/agent-skill) teaches an agent to call the API, this one teaches it to drive a browser with it. MIT licensed.
+The action-space design follows [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast). Jev is built by [TypeSafe](https://typesafe.ai); their own [agent skill](https://docs.typesafe.ai/agent-skill) teaches an agent to call the API, this one teaches it to drive a browser with it.
+
+© 2026 Gerard Rovira · MIT license
