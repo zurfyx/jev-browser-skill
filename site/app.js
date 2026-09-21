@@ -101,6 +101,8 @@ function renderSteps(list, active, onPick) {
 
 async function loadTrace(source) {
   trace = typeof source === "string" ? await (await fetch(source)).json() : source;
+  // a hand-written note per step may sit beside a shipped trace; dropped traces simply have none
+  trace.notes = typeof source === "string" ? await fetch(source.replace(/\.json$/, ".notes.json")).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   steps = trace.steps.map(s => ({ ...s, secretOffered: trace.secret }));
   show(0);
 }
@@ -111,7 +113,10 @@ function show(i) {
   $("prev").disabled = current === 0; $("next").disabled = current === steps.length - 1;
   const s = steps[current];
   $("replay-goal").innerHTML = `<b>Goal</b> ${esc(trace.goal)}`;
-  $("status").textContent = `Step ${current + 1} of ${steps.length}` + (current === steps.length - 1 && trace.result ? ` · finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev` : s.executed === false ? " · not executed: the page changed first, so it was observed again" : "");
+  const note = trace.notes?.[current];
+  const tail = current === steps.length - 1 && trace.result ? ` Finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev.`
+    : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";
+  $("status").innerHTML = `<span class="n">${current + 1} / ${steps.length}</span>` + esc(note ?? "") + esc(tail);
 }
 
 // ---------- live ----------

@@ -1,0 +1,10 @@
+[
+  "The front page, 230 controls. CLICK 0.56 against TYPE 0.41: Jev nearly typed into the search box, but the goal says log in first, and the login link took 0.89 of the click head.",
+  "The login form, 7 controls. Two strings were on offer, so a second request asked which one belongs in this field: zurfyx.",
+  "The password field. A secret was supplied, so the field is offered under TYPE. Jev sees that it exists and that it is empty, never the value.",
+  "Both fields filled. ENTER was on offer, since the last action was a TYPE, but Jev chose the login button at 0.92.",
+  "Logged in, back on the front page with 232 controls. The search box is the only textbox, so no target question was needed; a second request picked which string to type: Jev.",
+  "The query is in the box. ENTER is offered only straight after a TYPE, and Jev submits at 0.90.",
+  "Search results, 203 controls. Jev picks the 510 comments link at 0.83 over the story link at 0.12: the goal said comments.",
+  "The thread. DONE at 0.70, the least sure answer of the run: whether this is the top result's comments is a judgment, and CLICK kept 0.20."
+]
