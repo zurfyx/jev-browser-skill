@@ -124,6 +124,8 @@ h1 { font-size: clamp(1.55rem, 1.2rem + 1.4vw, 2.1rem); font-weight: 600; line-h
 .controls select { appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' stroke='%238a8e99' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
 .drop { border: 1px dashed var(--line-2); border-radius: 8px; padding: 7px 13px; color: var(--ink-3); text-transform: none; letter-spacing: 0; font-size: 12.5px; cursor: default; transition: border-color .15s, background .15s, color .15s; }
 .drop.over { border-color: var(--accent); background: var(--jev-fill); color: var(--jev-ink); }
+.goal-line { flex-basis: 100%; margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.45; }
+.goal-line b { font-weight: 600; color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-right: 8px; }
 #custom-html { width: 100%; margin-top: 4px; font: 12px/1.5 var(--mono); padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--sunk); color: var(--ink); resize: vertical; }
 
 /* ---------- board: three lanes ---------- */
@@ -221,13 +223,18 @@ button.btn.primary:hover:not(:disabled) { background: var(--accent-ink); }
 button.btn:disabled { opacity: .4; cursor: default; box-shadow: none; }
 button.btn.ghost { background: transparent; box-shadow: none; border-color: transparent; color: var(--ink-2); }
 button.btn.ghost:hover:not(:disabled) { color: var(--ink); background: var(--surface); border-color: var(--line); }
-.status { color: var(--ink-2); font-size: 13px; margin: 10px 0 0; min-height: 20px; }
+/* the caption for the board: what is happening in the step you are looking at */
+.board .status { grid-column: 1 / -1; margin: 0; padding: 4px 2px 6px; font-size: 14.5px; line-height: 1.5; color: var(--ink); max-width: 80ch; text-wrap: pretty; font-variant-numeric: tabular-nums; }
+.board .status::before { content: ""; display: block; width: 28px; height: 2px; background: var(--jev); border-radius: 1px; margin-bottom: 9px; }
+.counter { font: 500 12px var(--mono); color: var(--ink-3); margin-left: 4px; }
+.counter:empty { display: none; }
+.status:empty { display: none; }
 .status b { color: var(--ink); font-weight: 600; }
 .status .live-dot { display: inline-block; width: 7px; height: 7px; border-radius: 99px; background: var(--accent); margin-right: 7px; vertical-align: middle; animation: blink 1s steps(2) infinite; }
 @keyframes blink { 50% { opacity: .3; } }
 
 /* ---------- lessons ---------- */
-.lessons { border-top: 1px solid var(--line); margin-top: 30px; padding: 30px 0 48px; }
+.lessons { border-top: 1px solid var(--line); margin-top: 30px; padding-block: 30px 48px; }
 .lessons > h2 { font-size: 1.35rem; font-weight: 600; margin-bottom: 4px; }
 .lessons > .sub { margin: 0 0 20px; }
 .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }

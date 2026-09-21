@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>How Jev drives a browser</title>
-<meta name="description" content="Step through a real run of the Jev browser skill: what the code built from the page, what Jev was asked, what it answered, and what ran.">
+<meta name="description" content="Step through a real run of the Jev browser skill: what the skill listed from the page, what Jev was asked, what it answered, and what ran.">
 <meta name="color-scheme" content="light dark">
 <link rel="icon" href="/site/favicon.svg" type="image/svg+xml">
 <script>(()=>{const t=localStorage.getItem("theme");if(t)document.documentElement.dataset.theme=t;})();</script>
@@ -19,8 +19,8 @@
 <header class="top">
   <div class="brand">
     <h1>How Jev drives a browser</h1>
-    <p class="lede"><strong>Jev picks, it never writes.</strong> Every step is a multiple-choice question the code builds from the live page; Jev answers with one option and a probability.</p>
-    <p class="sub">Step through a real run: <span class="who page">the page</span>, <span class="who code">what the code built</span>, <span class="who jev">what Jev answered</span>. The logic here is <a href="/scripts/core.mjs"><code>scripts/core.mjs</code></a> — the same file the <a href="https://github.com/zurfyx/jev-browser-skill">skill</a> runs.</p>
+    <p class="lede">The skill reads the page and lists everything it could click, type into or select. Jev picks one and says how sure it is. The skill does it, then asks again with the new page, until Jev says the goal is done.</p>
+    <p class="sub">Step through a real run below, or run one live. The logic is <a href="/scripts/core.mjs"><code>scripts/core.mjs</code></a>, the same file the <a href="https://github.com/zurfyx/jev-browser-skill">skill</a> runs.</p>
   </div>
   <div class="header-tools">
     <nav class="modes" role="tablist" aria-label="Mode">
@@ -38,6 +38,7 @@
   <div class="only-replay">
     <label>Trace <select id="trace-select"><option value="/site/traces/hackernews-login.json">Hacker News · log in, search Jev, open the thread</option></select></label>
     <label class="drop" id="drop">or drop a <code>--trace</code> file</label>
+    <p class="goal-line" id="replay-goal"></p>
   </div>
   <div class="only-live" hidden>
     <label>Page <select id="sample-select"></select></label>
@@ -50,7 +51,7 @@
 
 <main class="board" id="board">
   <section class="col page-col">
-    <h2><span class="tag">page</span> the live page <span id="page-url" class="url"></span></h2>
+    <h2><span class="tag">page</span> the page right now <span id="page-url" class="url"></span></h2>
     <div class="col-body">
       <div class="frame" id="frame"></div>
       <p class="note" id="page-note"></p>
@@ -58,18 +59,18 @@
   </section>
 
   <section class="col code-col">
-    <h2><span class="tag">code</span> what it built from the page</h2>
+    <h2><span class="tag">skill</span> what the skill listed</h2>
     <div class="col-body">
       <div class="sub-h">element table <span class="muted" id="table-count"></span></div>
       <div class="table" id="table"></div>
-      <div class="sub-h">also in the request</div>
+      <div class="sub-h">sent with the table</div>
       <div class="extras" id="extras"></div>
       <details><summary>the request, verbatim <button class="copy" id="copy-request" type="button">copy</button></summary><pre id="request"></pre></details>
     </div>
   </section>
 
   <section class="col jev-col">
-    <h2><span class="tag">Jev</span> what it answered</h2>
+    <h2><span class="tag">Jev</span> what Jev decided</h2>
     <div class="col-body">
       <div id="answers"></div>
       <div class="decision" id="decision"></div>
@@ -77,6 +78,7 @@
       <details><summary>the answers, verbatim</summary><pre id="answers-raw"></pre></details>
     </div>
   </section>
+  <p class="status" id="status"></p>
 </main>
 
 <footer class="stepbar">
@@ -84,27 +86,27 @@
   <div class="controls-row">
     <button id="prev" class="btn ghost" type="button">‹ prev</button>
     <button id="next" class="btn primary" type="button">next ›</button>
+    <span id="counter" class="counter"></span>
     <button id="ask" class="btn only-live" type="button" hidden>ask Jev</button>
     <button id="execute" class="btn only-live" type="button" hidden>execute</button>
     <button id="autoplay" class="btn primary only-live" type="button" hidden>▶ autoplay</button>
     <button id="reset" class="btn ghost only-live" type="button" hidden>reset</button>
   </div>
-  <p class="status" id="status"></p>
 </footer>
 </div>
 
 <section class="wrap lessons">
   <h2>What to notice</h2>
-  <p class="sub">Each place this implementation stops is a lesson about Jev.</p>
+  <p class="sub">The limits of this small implementation are where Jev's shape shows.</p>
   <div class="grid">
-    <div><h3>One request, several questions</h3><p>The request asks for the <em>operation</em> and, speculatively, a target under every operation. The answer to the head that matches the chosen operation is used; the rest are discarded. Two dependent decisions, one round trip.</p></div>
-    <div><h3>Jev only sees the table</h3><p>Not the DOM, not a screenshot. Whatever the observe step failed to capture, Jev cannot choose. Early on the login fields were labelled <code>acct</code> and <code>pw</code>, and Jev answered <code>BLOCKED 0.31</code>. Better labels fixed it.</p></div>
-    <div><h3>Jev never writes text</h3><p><code>text_values</code> are supplied by the caller; Jev picks which one belongs in a field. A secret is typed only into password fields and never enters a request: Jev sees the field exists and whether it is filled.</p></div>
-    <div><h3>Every answer is validated</h3><p>An answer is a key into a table the code built. If it is not in the offered set, the code throws and nothing runs. Model output never becomes a selector, a coordinate or JavaScript.</p></div>
-    <div><h3>255 options per question</h3><p>So this skill offers the first 250 controls and warns when it skipped some. The Hacker News front page has 227. Larger pages need a first question that narrows to a region before this one.</p></div>
-    <div><h3>Stateless, and cheap</h3><p>Every step is an independent request. The only memory is the <code>recent_actions</code> the code chooses to send. A step is a few thousand input tokens; output is free.</p></div>
+    <div><h3>One request, several questions</h3><p>Each request asks for the operation and, speculatively, a target under every operation. Only the head matching the chosen operation is read: two decisions, one round trip.</p></div>
+    <div><h3>Jev only sees the table</h3><p>Not the DOM, not a screenshot. When the login fields were labelled <code>acct</code> and <code>pw</code>, Jev answered <code>BLOCKED 0.31</code>; better labels fixed it.</p></div>
+    <div><h3>Jev never writes text</h3><p>You supply the strings; Jev picks which one goes where. A secret goes only into password fields and never into a request.</p></div>
+    <div><h3>Every answer is validated</h3><p>An answer is a key into the table the skill built. Anything outside it throws, and nothing runs.</p></div>
+    <div><h3>255 options per question</h3><p>So the first 250 controls are offered, with a warning when some were skipped. Hacker News' front page has 227; a product grid needs a narrowing question first.</p></div>
+    <div><h3>Stateless, and cheap</h3><p>Each step is an independent request whose only memory is the <code>recent_actions</code> the skill sends. A few thousand input tokens; output is free.</p></div>
   </div>
-  <p class="colophon">Reference implementation, MIT. Read the code on <a href="https://github.com/zurfyx/jev-browser-skill">GitHub</a>. Jev is by <a href="https://typesafe.ai">TypeSafe</a>.</p>
+  <p class="colophon">© 2026 Gerard Rovira · MIT license · code on <a href="https://github.com/zurfyx/jev-browser-skill">GitHub</a> · Jev is by <a href="https://typesafe.ai">TypeSafe</a></p>
 </section>
 
 <script type="module" src="/site/app.js"></script>

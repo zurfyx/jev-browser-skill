@@ -41,7 +41,7 @@ function renderStep(step, { liveFrame = false } = {}) {
     $("frame").append(mark);
   }
   const belowFold = chosen?.rect && page.viewport && (chosen.rect.y > page.viewport.h || chosen.rect.y + chosen.rect.h < 0);
-  $("page-note").textContent = (belowFold ? "The target is outside the screenshot; the code scrolled it into view before acting. " : "") + (page.omitted ? `${page.omitted} controls beyond the first 250 were not offered (Jev takes at most 255 options per question).` : `${page.elements.length} controls observed, ${page.text.length} characters of visible text.`);
+  $("page-note").textContent = (belowFold ? "The target is outside the screenshot; the skill scrolled it into view before acting. " : "") + (page.omitted ? `${page.omitted} controls beyond the first 250 were not offered (Jev takes at most 255 options per question).` : `${page.elements.length} controls observed, ${page.text.length} characters of visible text.`);
 
   // code column
   $("table-count").textContent = `${page.elements.length} rows`;
@@ -55,12 +55,10 @@ function renderStep(step, { liveFrame = false } = {}) {
   }).join("");
   { const t = $("table"), r = t.querySelector(".row.chosen"); if (r) t.scrollTop = r.offsetTop - t.clientHeight / 2 + r.offsetHeight / 2; } // scroll the table, never the page
   const st = body.state;
-  $("extras").innerHTML = [
-    `goal: <code>${esc(st.page ? body.questions.operation.instructions.goal : "")}</code>`,
-    `text_values: <code>${esc(JSON.stringify(st.text_values))}</code>${step.secretOffered ? " + a secret, offered for password fields only, never in the request" : ""}`,
-    `visible text: <code>${esc(st.page.text.slice(0, 140).replace(/\n/g, " ⏎ "))}${st.page.text.length > 140 ? "…" : ""}</code>`,
+  $("extras").innerHTML = [ // the goal and the page text are in the verbatim request below; here only what changes per step
+    `text_values: <code>${esc(JSON.stringify(st.text_values))}</code>${step.secretOffered ? " <span class=\"muted\">+ a secret, password fields only, never sent</span>" : ""}`,
     `recent_actions (${st.recent_actions.length}): <code>${esc(st.recent_actions.slice(-3).map(a => `${a.operation} ${a.target ?? ""}`).join(" → ") || "none yet")}</code>`,
-    `questions asked: <code>${Object.keys(body.questions).join(", ")}</code>`,
+    `questions in this request: <code>${Object.keys(body.questions).join(", ")}</code>`,
   ].join("<br>");
   $("request").textContent = JSON.stringify(body, null, 2);
 
@@ -103,6 +101,8 @@ function renderSteps(list, active, onPick) {
 
 async function loadTrace(source) {
   trace = typeof source === "string" ? await (await fetch(source)).json() : source;
+  // a hand-written note per step may sit beside a shipped trace; dropped traces simply have none
+  trace.notes = typeof source === "string" ? await fetch(source.replace(/\.json$/, ".notes.json")).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   steps = trace.steps.map(s => ({ ...s, secretOffered: trace.secret }));
   show(0);
 }
@@ -112,7 +112,12 @@ function show(i) {
   renderSteps(steps, current, show);
   $("prev").disabled = current === 0; $("next").disabled = current === steps.length - 1;
   const s = steps[current];
-  $("status").textContent = `Step ${current + 1} of ${steps.length} · goal: ${trace.goal}` + (current === steps.length - 1 && trace.result ? ` · finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it in Jev` : s.executed === false ? " · not executed: the page changed before the action, observed again" : "");
+  $("replay-goal").innerHTML = `<b>Goal</b> ${esc(trace.goal)}`;
+  const note = trace.notes?.[current];
+  const tail = current === steps.length - 1 && trace.result ? ` Finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev.`
+    : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";
+  $("counter").textContent = `${current + 1} / ${steps.length}`;
+  $("status").textContent = (note ?? "") + tail;
 }
 
 // ---------- live ----------
@@ -135,7 +140,7 @@ async function liveReset() {
   live = { iframe, history: [], steps: [], page: null, decision: null, started: performance.now() };
   ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps"].forEach(id => ($(id).innerHTML = ""));
   document.querySelectorAll("#frame .mark").forEach(m => m.remove());
-  $("page-url").textContent = sample.title; $("page-note").textContent = "";
+  $("page-url").textContent = sample.title; $("page-note").textContent = ""; $("counter").textContent = "";
   live.auto = false; $("autoplay").textContent = "▶ autoplay"; $("autoplay").disabled = false; $("ask").disabled = false; $("execute").disabled = true;
   $("status").textContent = "Press “ask Jev”: the page is observed, one request is sent with your key, and the answer is shown before anything runs.";
 }
@@ -167,7 +172,7 @@ async function askLive() {
     renderStep(step, { liveFrame: true });
     renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
     if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return operation; }
-    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet — press execute.`;
+    $("execute").disabled = false; $("status").textContent = `Jev chose ${step.decision.target ?? operation}. Nothing has run yet — press execute to let the skill do it.`;
     return "pending";
   } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
 }
@@ -188,7 +193,7 @@ async function executeLive() {
     }
     live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, fingerprint: fingerprint(live.page) });
     await new Promise(r => setTimeout(r, 500));
-    $("ask").disabled = false; $("status").textContent = "Executed by the code. Ask Jev for the next step.";
+    $("ask").disabled = false; $("status").textContent = "Executed by the skill. Ask Jev for the next step.";
     return "ok";
   } catch (err) { window.__lastError = err.stack; $("status").textContent = err.message; $("ask").disabled = false; return "error"; }
 }
