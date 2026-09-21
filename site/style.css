@@ -124,6 +124,8 @@ h1 { font-size: clamp(1.55rem, 1.2rem + 1.4vw, 2.1rem); font-weight: 600; line-h
 .controls select { appearance: none; padding-right: 30px; background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath d='M3 4.5 6 7.5 9 4.5' stroke='%238a8e99' stroke-width='1.4' fill='none' stroke-linecap='round'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 10px center; }
 .drop { border: 1px dashed var(--line-2); border-radius: 8px; padding: 7px 13px; color: var(--ink-3); text-transform: none; letter-spacing: 0; font-size: 12.5px; cursor: default; transition: border-color .15s, background .15s, color .15s; }
 .drop.over { border-color: var(--accent); background: var(--jev-fill); color: var(--jev-ink); }
+.goal-line { flex-basis: 100%; margin: 2px 0 0; font-size: 13.5px; color: var(--ink-2); line-height: 1.45; }
+.goal-line b { font-weight: 600; color: var(--ink-3); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; margin-right: 8px; }
 #custom-html { width: 100%; margin-top: 4px; font: 12px/1.5 var(--mono); padding: 10px; border: 1px solid var(--line-2); border-radius: 8px; background: var(--sunk); color: var(--ink); resize: vertical; }
 
 /* ---------- board: three lanes ---------- */

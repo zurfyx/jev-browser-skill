@@ -55,12 +55,10 @@ function renderStep(step, { liveFrame = false } = {}) {
   }).join("");
   { const t = $("table"), r = t.querySelector(".row.chosen"); if (r) t.scrollTop = r.offsetTop - t.clientHeight / 2 + r.offsetHeight / 2; } // scroll the table, never the page
   const st = body.state;
-  $("extras").innerHTML = [
-    `goal: <code>${esc(st.page ? body.questions.operation.instructions.goal : "")}</code>`,
-    `text_values: <code>${esc(JSON.stringify(st.text_values))}</code>${step.secretOffered ? " + a secret, offered for password fields only, never in the request" : ""}`,
-    `visible text: <code>${esc(st.page.text.slice(0, 140).replace(/\n/g, " ⏎ "))}${st.page.text.length > 140 ? "…" : ""}</code>`,
+  $("extras").innerHTML = [ // the goal and the page text are in the verbatim request below; here only what changes per step
+    `text_values: <code>${esc(JSON.stringify(st.text_values))}</code>${step.secretOffered ? " <span class=\"muted\">+ a secret, password fields only, never sent</span>" : ""}`,
     `recent_actions (${st.recent_actions.length}): <code>${esc(st.recent_actions.slice(-3).map(a => `${a.operation} ${a.target ?? ""}`).join(" → ") || "none yet")}</code>`,
-    `questions asked: <code>${Object.keys(body.questions).join(", ")}</code>`,
+    `questions in this request: <code>${Object.keys(body.questions).join(", ")}</code>`,
   ].join("<br>");
   $("request").textContent = JSON.stringify(body, null, 2);
 
@@ -112,7 +110,8 @@ function show(i) {
   renderSteps(steps, current, show);
   $("prev").disabled = current === 0; $("next").disabled = current === steps.length - 1;
   const s = steps[current];
-  $("status").textContent = `Step ${current + 1} of ${steps.length} · goal: ${trace.goal}` + (current === steps.length - 1 && trace.result ? ` · finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it in Jev` : s.executed === false ? " · not executed: the page changed before the action, observed again" : "");
+  $("replay-goal").innerHTML = `<b>Goal</b> ${esc(trace.goal)}`;
+  $("status").textContent = `Step ${current + 1} of ${steps.length}` + (current === steps.length - 1 && trace.result ? ` · finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev` : s.executed === false ? " · not executed: the page changed first, so it was observed again" : "");
 }
 
 // ---------- live ----------
