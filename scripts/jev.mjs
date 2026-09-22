@@ -122,14 +122,18 @@ async function main() {
       if (operation === "DONE" || operation === "BLOCKED") { status = operation.toLowerCase(); break; }
 
       if (e) {
-        const point = await chrome.locate(e.node, args.headless ? "" : `Jev · ${operation} · ${Math.round(decision.p * 100)}%`);
+        const aims = operation !== "SELECT"; // a SELECT needs no coordinates
+        let point = await chrome.locate(e.node, args.headless ? "" : `Jev · ${operation} · ${Math.round(decision.p * 100)}%`, aims);
         if (!point) { // the page moved under us: observe again rather than act on a stale decision
           trace.steps.at(-1).executed = false;
           if (++stale > 5) { status = "blocked"; break; }
           await chrome.settle();
           continue;
         }
-        if (!args.headless) await sleep(300); // let the highlight register on screen
+        if (!args.headless) { // the highlight pause is long enough for a busy page to reflow
+          await sleep(300);
+          point = (await chrome.locate(e.node, "", aims)) ?? point;
+        }
         if (operation === "SELECT") await chrome.select(e.node, option.value);
         else await chrome.click(point);
         if (operation === "TYPE") await chrome.type(e.node, text);

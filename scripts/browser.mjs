@@ -203,14 +203,17 @@ class Chrome {
     throw new Error("Page did not become readable");
   }
 
-  async locate(node, note) {
-    return this.evaluate(`${LOCATE}(${Number(node)}, ${JSON.stringify(note)})`);
+  async locate(node, note, coordinates = true) {
+    return this.evaluate(`${LOCATE}(${Number(node)}, ${JSON.stringify(note)}, ${Boolean(coordinates)})`);
   }
 
   async click({ x, y }) {
-    for (const type of ["mousePressed", "mouseReleased"]) {
-      await this.send("Input.dispatchMouseEvent", { type, x, y, button: "left", clickCount: 1 });
-    }
+    // Press and release must not straddle a round trip. A page that reflows in between
+    // takes the release somewhere else, and the browser then synthesizes no click at all.
+    await Promise.all([
+      this.send("Input.dispatchMouseEvent", { type: "mousePressed", x, y, button: "left", buttons: 1, clickCount: 1 }),
+      this.send("Input.dispatchMouseEvent", { type: "mouseReleased", x, y, button: "left", buttons: 0, clickCount: 1 }),
+    ]);
   }
 
   async type(node, text) {

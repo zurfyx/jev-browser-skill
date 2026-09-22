@@ -124,7 +124,7 @@ const SNAPSHOT = `(() => {
 })()`;
 
 // Runs inside the page just before input: re-check the observed node, bring it on screen, hit-test its centre.
-const LOCATE = `((id, note) => {
+const LOCATE = `((id, note, coordinates = true) => {
   const e = window.__jev?.nodes.get(id);
   if (!e?.isConnected || e.matches(':disabled') || !e.checkVisibility()) return null;
   e.closest('a[target]')?.removeAttribute('target'); // stay in this tab
@@ -135,8 +135,12 @@ const LOCATE = `((id, note) => {
   }
   const x = r.x + r.width / 2, y = r.y + r.height / 2;
   if (!r.width || !r.height || x < 0 || y < 0 || x >= innerWidth || y >= innerHeight) return null;
-  const hit = document.elementFromPoint(x, y);
-  if (hit && !e.contains(hit) && !hit.contains(e)) return null;
+  // Only a real mouse click needs the centre point to belong to the element. A SELECT is
+  // executed by setting .value, so a skin painted over the native control must not block it.
+  if (coordinates) {
+    const hit = document.elementFromPoint(x, y);
+    if (hit && !e.contains(hit) && !hit.contains(e)) return null;
+  }
   if (note) {
     const box = document.createElement('div');
     box.style.cssText = 'position:fixed;z-index:2147483647;pointer-events:none;border:2px solid #ff4f00;' +
