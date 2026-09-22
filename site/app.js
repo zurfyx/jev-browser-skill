@@ -119,7 +119,9 @@ function writeHash() {
 }
 
 let shareable = true;
-let player = null; // rAF handle while a run is playing
+let player = null;   // rAF handle while a run is playing
+let pausedAt = null; // where a run was paused, so play resumes rather than restarts
+let playhead = 0;    // the moment the transport is showing, in ms into the run
 
 /** Everything the transport needs: when each decision landed, how long Jev took, what it cost. */
 function timings(t) {
@@ -155,23 +157,26 @@ function readout(ms) {
   $("readout").innerHTML = `${(Math.min(ms, total) / 1000).toFixed(1)}s / ${(total / 1000).toFixed(1)}s · <b>${(jev / 1000).toFixed(2)}s in Jev</b> · ${tokens.toLocaleString()} tokens · ${money(tokens * PRICE_PER_TOKEN)}`;
   $("head").style.transform = `translateX(${(Math.min(ms, total) / total) * $("timeline").clientWidth}px)`;
 }
-function stopPlay() {
+function stopPlay({ keepPosition = false } = {}) {
   if (player) cancelAnimationFrame(player);
-  player = null; $("play").removeAttribute("data-playing");
+  player = null;
+  if (!keepPosition) pausedAt = null;
+  $("play").removeAttribute("data-playing");
 }
 function play() {
-  if (player) return stopPlay();
+  if (player) { pausedAt = playhead; return stopPlay({ keepPosition: true }); } // a second press pauses
   const { marks, total } = timings(trace);
-  const from = current >= steps.length - 1 ? 0 : marks[current].at; // replaying from the end starts over
+  const from = pausedAt ?? 0; // a run always plays from its start unless it was paused mid-way
+  pausedAt = null;
   const t0 = performance.now() - from;
   $("play").setAttribute("data-playing", "");
-  if (from === 0) show(0);
+  show(Math.max(0, marks.findLastIndex(m => m.at <= from)), true);
   const frame = () => {
-    const ms = performance.now() - t0;
+    const ms = playhead = performance.now() - t0;
     readout(ms);
     const i = marks.findLastIndex(m => m.at <= ms);
     if (i >= 0 && i !== current) show(i, true);
-    if (ms >= total) { readout(total); return stopPlay(); }
+    if (ms >= total) { readout(total); playhead = 0; return stopPlay(); }
     player = requestAnimationFrame(frame);
   };
   player = requestAnimationFrame(frame);
@@ -186,7 +191,7 @@ async function loadTrace(source, step = 1) {
   show(step - 1);
 }
 function show(i, fromPlayer = false) {
-  if (!fromPlayer) stopPlay();
+  if (!fromPlayer) stopPlay(); // also clears a paused position
   current = Math.max(0, Math.min(steps.length - 1, i));
   renderStep(steps[current]);
   renderSteps(steps, current, show);
