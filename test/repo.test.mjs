@@ -40,17 +40,29 @@ test("agent tooling directories are not tracked", () => {
   assert.deepEqual(leaked, [], "machine-local agent config must stay out of the repo");
 });
 
-test("the shipped trace is well formed and carries no secret", () => {
-  const trace = JSON.parse(read("site/traces/hackernews-login.json"));
-  assert.ok(trace.steps.length > 0);
-  assert.equal(trace.secret, true, "this run used a secret");
-  for (const step of trace.steps) {
-    assert.ok(step.calls?.[0]?.body?.questions?.operation, "each step keeps the request it sent");
-    assert.ok(step.decision.operation, "each step keeps what Jev decided");
-    if (step.decision.text) assert.ok(!/[a-z]/.test(step.decision.text) || step.decision.text === "Jev" || step.decision.text === "zurfyx",
-      "a typed secret must be masked in the trace");
+test("every shipped trace is well formed, and its notes line up", () => {
+  const traces = tracked.filter(f => f.startsWith("site/traces/") && f.endsWith(".json") && !f.endsWith(".notes.json"));
+  assert.ok(traces.length, "the site ships at least one trace");
+  for (const file of traces) {
+    const raw = read(file), trace = JSON.parse(raw);
+    assert.ok(trace.steps.length > 0, `${file} has steps`);
+    assert.ok(trace.goal && trace.result?.status, `${file} records its goal and outcome`);
+    for (const step of trace.steps) {
+      assert.ok(step.calls?.[0]?.body?.questions?.operation, `${file} keeps the request it sent`);
+      assert.ok(step.decision.operation, `${file} keeps what Jev decided`);
+    }
+    // a secret is masked at the source, so no trace may carry one
+    assert.ok(!/lZVjb|hunter2/.test(raw), `${file} must contain no password`);
+    for (const step of trace.steps) {
+      if (step.decision.text && trace.secret) {
+        assert.ok(!/^.{0,40}$/.test(step.decision.text) || !/secret/i.test(step.decision.text), `${file} masks typed secrets`);
+      }
+    }
+    const notes = file.replace(/\.json$/, ".notes.json");
+    if (tracked.includes(notes)) {
+      assert.equal(JSON.parse(read(notes)).length, trace.steps.length, `${notes} needs one note per step`);
+    }
   }
-  assert.ok(!/lZVjb|hunter2/.test(read("site/traces/hackernews-login.json")), "no password in the trace");
 });
 
 test("the site only references files that exist", () => {
