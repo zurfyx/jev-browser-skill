@@ -211,6 +211,22 @@ pre { background: var(--sunk); border: 1px solid var(--line); border-radius: 8px
 
 /* ---------- step bar (sticky foot) ---------- */
 .stepbar { position: sticky; bottom: 0; z-index: 5; margin-top: 16px; padding: 13px 0 16px; background: var(--ground); box-shadow: 0 -1px 0 var(--line), 0 -14px 22px -12px var(--ground); }
+/* transport: the run played at its real speed, Jev's share marked on the timeline */
+.transport { display: flex; align-items: center; gap: 13px; margin-bottom: 13px; }
+.play { flex: none; width: 34px; height: 34px; display: grid; place-items: center; padding: 0; border-radius: 99px; border: 0; background: var(--accent); color: #fff; cursor: pointer; box-shadow: 0 1px 2px rgba(242,83,10,.3); transition: background .15s, transform .12s; }
+.play:hover { background: var(--accent-ink); } .play:active { transform: scale(.94); }
+.play svg { width: 15px; height: 15px; fill: currentColor; margin-left: 1px; }
+.play .bars { display: none; } .play[data-playing] .bars { display: block; } .play[data-playing] .tri { display: none; } .play[data-playing] svg { margin-left: 0; }
+.timeline { position: relative; flex: 1 1 auto; min-width: 0; height: 22px; }
+.timeline::before { content: ""; position: absolute; left: 0; right: 0; top: 9px; height: 4px; border-radius: 2px; background: var(--line); }
+.timeline .jev { position: absolute; top: 7px; height: 8px; min-width: 2px; border-radius: 2px; background: var(--jev); }
+.timeline .mark { position: absolute; top: 3px; width: 1px; height: 16px; background: var(--line-2); }
+.timeline .head { position: absolute; top: 1px; width: 2px; height: 20px; border-radius: 1px; background: var(--ink); left: 0; will-change: transform; }
+.readout { flex: 0 1 auto; margin: 0; font: 400 12px var(--mono); color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.readout:empty { display: none; }
+.readout b { color: var(--jev-ink); font-weight: 600; }
+@media (max-width: 700px) { .transport { flex-wrap: wrap; } .readout { flex-basis: 100%; } }
+
 .steps { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 11px; }
 .step { border: 1px solid var(--line-2); background: var(--surface); border-radius: 8px; padding: 4px 11px; font: 500 12px var(--mono); color: var(--ink-2); cursor: pointer; transition: all .15s; }
 .step:hover { border-color: var(--ink-3); color: var(--ink); }

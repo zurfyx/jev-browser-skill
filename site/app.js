@@ -119,15 +119,74 @@ function writeHash() {
 }
 
 let shareable = true;
+let player = null; // rAF handle while a run is playing
+
+/** Everything the transport needs: when each decision landed, how long Jev took, what it cost. */
+function timings(t) {
+  let jev = 0, tokens = 0;
+  const marks = t.steps.map(s => {
+    jev += s.decision.ms || 0;
+    tokens += s.calls.reduce((n, c) => n + (c.usage?.input_tokens ?? 0), 0);
+    return { at: s.elapsed_ms ?? 0, ms: s.decision.ms || 0, jev, tokens };
+  });
+  return { marks, total: Math.max(1, (t.result?.seconds ?? 0) * 1000, marks.at(-1)?.at ?? 0) };
+}
+function drawTimeline() {
+  const { marks, total } = timings(trace);
+  $("timeline").querySelectorAll(".jev,.mark").forEach(e => e.remove());
+  const head = $("head");
+  for (const m of marks) {
+    const tick = document.createElement("div");
+    tick.className = "mark"; tick.style.left = `${(m.at / total) * 100}%`;
+    const jev = document.createElement("div");
+    // Jev's share of the run, drawn to scale: the decision ends where the step lands
+    jev.className = "jev";
+    jev.style.left = `${(Math.max(0, m.at - m.ms) / total) * 100}%`;
+    jev.style.width = `${Math.max(0.35, (m.ms / total) * 100)}%`;
+    $("timeline").append(tick, jev);
+  }
+  $("timeline").append(head);
+}
+/** The readout at a given moment of the run. */
+function readout(ms) {
+  const { marks, total } = timings(trace);
+  const done = marks.filter(m => m.at <= ms).at(-1);
+  const jev = done?.jev ?? 0, tokens = done?.tokens ?? 0;
+  $("readout").innerHTML = `${(Math.min(ms, total) / 1000).toFixed(1)}s / ${(total / 1000).toFixed(1)}s · <b>${(jev / 1000).toFixed(2)}s in Jev</b> · ${tokens.toLocaleString()} tokens · ${money(tokens * PRICE_PER_TOKEN)}`;
+  $("head").style.transform = `translateX(${(Math.min(ms, total) / total) * $("timeline").clientWidth}px)`;
+}
+function stopPlay() {
+  if (player) cancelAnimationFrame(player);
+  player = null; $("play").removeAttribute("data-playing");
+}
+function play() {
+  if (player) return stopPlay();
+  const { marks, total } = timings(trace);
+  const from = current >= steps.length - 1 ? 0 : marks[current].at; // replaying from the end starts over
+  const t0 = performance.now() - from;
+  $("play").setAttribute("data-playing", "");
+  if (from === 0) show(0);
+  const frame = () => {
+    const ms = performance.now() - t0;
+    readout(ms);
+    const i = marks.findLastIndex(m => m.at <= ms);
+    if (i >= 0 && i !== current) show(i, true);
+    if (ms >= total) { readout(total); return stopPlay(); }
+    player = requestAnimationFrame(frame);
+  };
+  player = requestAnimationFrame(frame);
+}
 async function loadTrace(source, step = 1) {
   shareable = typeof source === "string";
   trace = typeof source === "string" ? await (await fetch(source)).json() : source;
   // a hand-written note per step may sit beside a shipped trace; dropped traces simply have none
   trace.notes = typeof source === "string" ? await fetch(source.replace(/\.json$/, ".notes.json")).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   steps = trace.steps.map(s => ({ ...s, secretOffered: trace.secret }));
+  stopPlay(); drawTimeline();
   show(step - 1);
 }
-function show(i) {
+function show(i, fromPlayer = false) {
+  if (!fromPlayer) stopPlay();
   current = Math.max(0, Math.min(steps.length - 1, i));
   renderStep(steps[current]);
   renderSteps(steps, current, show);
@@ -139,6 +198,7 @@ function show(i) {
     : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";
   $("counter").textContent = `${current + 1} / ${steps.length}`;
   $("status").textContent = (note ?? "") + tail;
+  if (!player) readout(timings(trace).marks[current].at); // parked: show this step's moment
   writeHash();
 }
 
@@ -155,12 +215,20 @@ function liveFrame(html, allowScripts) {
   $("frame").innerHTML = ""; $("frame").append(iframe);
   return new Promise(resolve => (iframe.onload = () => resolve(iframe)));
 }
+function liveReadout() {
+  if (!live?.steps.length) return void ($("readout").textContent = "");
+  const jev = live.steps.reduce((t, s) => t + (s.decision.ms || 0), 0);
+  const tokens = live.steps.reduce((t, s) => t + s.calls.reduce((n, c) => n + (c.usage?.input_tokens ?? 0), 0), 0);
+  const wall = (live.steps.at(-1).elapsed_ms || 0) / 1000;
+  $("readout").innerHTML = `${wall.toFixed(1)}s so far · <b>${(jev / 1000).toFixed(2)}s in Jev</b> · ${tokens.toLocaleString()} tokens · ${money(tokens * PRICE_PER_TOKEN)}`;
+}
+
 async function liveReset() {
   const key = $("sample-select").value, sample = samples[key];
   const html = key === "custom" ? ($("custom-html")?.value || "<p>Paste some HTML above.</p>") : sample.html;
   const iframe = await liveFrame(html, key !== "custom");
   live = { iframe, history: [], steps: [], page: null, decision: null, started: performance.now() };
-  ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps"].forEach(id => ($(id).innerHTML = ""));
+  ["table", "extras", "request", "answers", "decision", "meta", "answers-raw", "steps", "readout"].forEach(id => ($(id).innerHTML = ""));
   document.querySelectorAll("#frame .mark").forEach(m => m.remove());
   $("page-url").textContent = sample.title; $("page-note").textContent = ""; $("counter").textContent = "";
   live.auto = false; $("autoplay").textContent = "▶ autoplay"; $("autoplay").disabled = false; $("ask").disabled = false; $("execute").disabled = true;
@@ -190,7 +258,7 @@ async function askLive() {
     const { operation, e, option, text } = decision;
     const step = { elapsed_ms: Math.round(performance.now() - live.started), page, calls: decision.calls, secretOffered: Boolean(secret),
       decision: { operation, target: e && `[${e.index}] ${e.role} "${e.label}"`, option: option?.label, text: decision.secret ? "••••••" : text, p: decision.p, ms: decision.ms }, raw: decision };
-    live.steps.push(step); live.page = page; live.decision = decision;
+    live.steps.push(step); live.page = page; live.decision = decision; liveReadout();
     renderStep(step, { liveFrame: true });
     renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
     if (operation === "DONE" || operation === "BLOCKED") { $("status").textContent = `Jev answered ${operation}. ${OPERATIONS[operation]}`; return operation; }
@@ -266,11 +334,13 @@ function setMode(m) {
   document.querySelectorAll(".only-replay").forEach(el => (el.hidden = m !== "replay"));
   document.querySelectorAll(".only-live").forEach(el => (el.hidden = m !== "live"));
   $("prev").hidden = $("next").hidden = m !== "replay";
-  if (m === "live") { history.replaceState(null, "", "#live"); liveReset(); }
+  if (m === "live") { stopPlay(); history.replaceState(null, "", "#live"); liveReset(); }
   else show(Math.max(0, current)); // show() restores this run's address
 }
 document.querySelectorAll(".mode").forEach(b => (b.onclick = () => setMode(b.dataset.mode)));
 $("prev").onclick = () => show(current - 1); $("next").onclick = () => show(current + 1);
+$("play").onclick = play;
+addEventListener("resize", () => { if (!player) readout(timings(trace).marks[current].at); });
 document.addEventListener("keydown", e => { if (mode === "replay" && e.key === "ArrowRight") show(current + 1); if (mode === "replay" && e.key === "ArrowLeft") show(current - 1); });
 $("copy-request").onclick = e => { e.preventDefault(); navigator.clipboard.writeText($("request").textContent); e.target.textContent = "copied"; setTimeout(() => (e.target.textContent = "copy"), 1200); };
 $("trace-select").onchange = e => loadTrace(e.target.value);
