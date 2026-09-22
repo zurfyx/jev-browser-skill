@@ -99,12 +99,33 @@ function renderSteps(list, active, onPick) {
 
 // ---------- replay ----------
 
-async function loadTrace(source) {
+// The URL carries the run and the step, so any step of a shipped trace can be linked to:
+//   #amazon-cart        the run from its first step
+//   #amazon-cart/5      that run at step 5
+// A dropped file has no address and leaves the URL alone.
+const traceKey = path => path.split("/").pop().replace(/\.json$/, "");
+const keyPath = key => [...$("trace-select").options].find(o => traceKey(o.value) === key)?.value;
+function readHash() {
+  const raw = decodeURIComponent(location.hash.slice(1));
+  if (!raw || raw === "live") return null;
+  const [key, step] = raw.split("/");
+  return keyPath(key) ? { key, step: Math.max(1, Number(step) || 1) } : null;
+}
+function writeHash() {
+  if (mode !== "replay" || !shareable) return;
+  const key = traceKey($("trace-select").value);
+  const next = "#" + key + (current > 0 ? `/${current + 1}` : "");
+  if (location.hash !== next) history.replaceState(null, "", next);
+}
+
+let shareable = true;
+async function loadTrace(source, step = 1) {
+  shareable = typeof source === "string";
   trace = typeof source === "string" ? await (await fetch(source)).json() : source;
   // a hand-written note per step may sit beside a shipped trace; dropped traces simply have none
   trace.notes = typeof source === "string" ? await fetch(source.replace(/\.json$/, ".notes.json")).then(r => r.ok ? r.json() : null).catch(() => null) : null;
   steps = trace.steps.map(s => ({ ...s, secretOffered: trace.secret }));
-  show(0);
+  show(step - 1);
 }
 function show(i) {
   current = Math.max(0, Math.min(steps.length - 1, i));
@@ -118,6 +139,7 @@ function show(i) {
     : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";
   $("counter").textContent = `${current + 1} / ${steps.length}`;
   $("status").textContent = (note ?? "") + tail;
+  writeHash();
 }
 
 // ---------- live ----------
@@ -244,8 +266,8 @@ function setMode(m) {
   document.querySelectorAll(".only-replay").forEach(el => (el.hidden = m !== "replay"));
   document.querySelectorAll(".only-live").forEach(el => (el.hidden = m !== "live"));
   $("prev").hidden = $("next").hidden = m !== "replay";
-  location.hash = m === "live" ? "live" : "";
-  if (m === "live") liveReset(); else show(Math.max(0, current));
+  if (m === "live") { history.replaceState(null, "", "#live"); liveReset(); }
+  else show(Math.max(0, current)); // show() restores this run's address
 }
 document.querySelectorAll(".mode").forEach(b => (b.onclick = () => setMode(b.dataset.mode)));
 $("prev").onclick = () => show(current - 1); $("next").onclick = () => show(current + 1);
@@ -292,5 +314,18 @@ matchMedia("(prefers-color-scheme: dark)").addEventListener("change", syncTheme)
 syncTheme();
 
 // Startup: always fetch the default trace so replay is ready, then show the mode from the URL.
-await loadTrace($("trace-select").value);
-if (location.hash === "#live") setMode("live");
+const startLive = location.hash === "#live"; // read before loading a trace rewrites the address
+const linked = readHash();
+if (linked) $("trace-select").value = keyPath(linked.key);
+await loadTrace($("trace-select").value, linked?.step ?? 1);
+if (startLive) setMode("live");
+
+// following a link to another step of the same page, or the browser's back button
+addEventListener("hashchange", () => {
+  if (location.hash === "#live") return void (mode !== "live" && setMode("live"));
+  const target = readHash();
+  if (!target) return;
+  if (mode !== "replay") setMode("replay");
+  if (traceKey($("trace-select").value) !== target.key) { $("trace-select").value = keyPath(target.key); loadTrace($("trace-select").value, target.step); }
+  else if (target.step - 1 !== current) show(target.step - 1);
+});
