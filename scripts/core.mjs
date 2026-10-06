@@ -15,6 +15,8 @@ several parts is advanced one part at a time; the later parts are not evidence o
 After typing a search query, submit it: press ENTER or click the search button.
 If an autocomplete suggestion matching the goal is visible, CLICK it.
 Do not toggle a checkbox or radio that is already in the requested state.
+If recent actions show a route is not working, or it needs an operation that is not offered,
+take another route: menus, tabs, lists and links can reach the same page.
 DONE requires visible evidence that every requirement of the goal is satisfied.
 BLOCKED means no offered operation can make progress.`;
 
@@ -92,6 +94,9 @@ const SNAPSHOT = `(() => {
     const r = e.getBoundingClientRect(), kind = role(e);
     if (!kind || !r.width || !r.height) continue;
     const item = { node: identity(e), role: kind, label: name(e) || kind, rect: { x: r.x, y: r.y, w: r.width, h: r.height } };
+    if (e.closest('[role="search"],search')) item.search = true;
+    const href = e.getAttribute('href');
+    if (e.tagName === 'A' && href && !/^(#|javascript:)/i.test(href)) item.href = e.href.split('#')[0];
     if (['checkbox', 'radio'].includes(e.type)) item.checked = e.checked;
     for (const key of ['checked', 'selected', 'expanded']) {
       const value = e.getAttribute('aria-' + key);
@@ -185,16 +190,29 @@ export const describe = e => ({
 export function buildRequest({ goal, page, texts = [], secret = "", history = [], model = "jev-latest" }) {
   page.elements.forEach((e, i) => (e.index = String(i + 1)));
   const last = history.at(-1);
+  // Jev is stateless, so it can keep picking the same best-looking target. A click already tried
+  // twice on this page is not offered again, which forces it onto another route. The #hash is
+  // ignored: apps keep view state there, so it changes with every click.
+  const bare = url => url?.split("#")[0];
+  const tried = {};
+  for (const h of history) if (h.operation === "CLICK" && bare(h.url) === bare(page.url)) tried[h.target] = (tried[h.target] || 0) + 1;
+  // A link back to a page already seen in this run is a step backwards, not a new route. Clicked
+  // hrefs count too: a link that redirects lands on a different URL than the one it shows.
+  const visited = new Set([...history.flatMap(h => [h.url, h.href]), page.url].filter(Boolean).map(bare));
+  const exhausted = e => tried[`${e.role} "${e.label}"`] >= 2 || visited.has(e.href);
   const targets = { CLICK: {}, TYPE: {}, SELECT: {} };
   for (const e of page.elements) {
     if (e.op === "SELECT") {
       e.options.forEach((o, i) => (targets.SELECT[`${e.index}:${i + 1}`] = { e, option: o }));
     } else if (e.op === "SECRET") {
       if (secret) targets.TYPE[e.index] = { e }; // offered only when the caller supplied a secret
-    } else {
-      if (e.op === "TYPE" && texts.length) targets.TYPE[e.index] = { e };
-      targets.CLICK[e.index] = { e };
-    }
+    } else if (e.op === "TYPE") {
+      if (!texts.length) continue; // with nothing to type, a search box is a dead end that looks like the way
+      targets.TYPE[e.index] = { e };
+      if (!exhausted(e)) targets.CLICK[e.index] = { e };
+    } else if (e.search && !texts.length) {
+      continue; // likewise its Search button: an empty search lands somewhere arbitrary
+    } else if (!exhausted(e)) targets.CLICK[e.index] = { e };
   }
   // Only operations that are possible right now are offered.
   const offered = Object.fromEntries(Object.entries(OPERATIONS).filter(([op]) =>
@@ -214,7 +232,7 @@ export function buildRequest({ goal, page, texts = [], secret = "", history = []
   }
   const state = {
     page: { url: page.url, title: page.title, text: page.text },
-    elements: page.elements.map(({ node, op, options, rect, ...rest }) => // node ids and geometry stay with the code
+    elements: page.elements.map(({ node, op, options, rect, search, href, ...rest }) => // node ids and geometry stay with the code
       ({ ...rest, operation: op === "SECRET" ? "TYPE" : op, ...(options ? { options: options.map(o => o.label) } : {}) })),
     text_values: texts,
     recent_actions: history.slice(-10).map(({ operation, target, text, url, page_changed }) => ({ operation, target, text, url, page_changed })),

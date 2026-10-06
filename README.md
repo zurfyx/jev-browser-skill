@@ -156,7 +156,7 @@ node ~/.claude/skills/jev-browser/scripts/jev.mjs \
 | `--browser` | `auto` (default), `yours`, `own`, or `host:port` |
 | `--headless` | No window |
 | `--close` | Close the tab or window at the end (it stays open by default so you can see the result) |
-| `--max-steps` | Action budget, default 25 |
+| `--max-steps` | Action budget, default 100 |
 
 `CHROME_PATH` overrides browser detection, `JEV_PROFILE` moves the Jev window's profile (default `~/.jev-browser/chrome`), `TYPESAFE_MODEL` overrides the model (default `jev-latest`), and `JEV_DEBUG=1` prints Jev's probabilities and per-phase timings.
 
