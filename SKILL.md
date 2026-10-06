@@ -26,14 +26,16 @@ from https://typesafe.ai — and do not try to work around it.
 ## Writing a good call
 
 - **`--goal`**: one or two plain sentences covering the whole task, ending with what "done"
-  looks like on screen ("Done when search results are visible").
+  looks like on screen ("Done when search results are visible"). If the exact thing may not
+  exist on the site, say what is acceptable instead ("a 10-year chart, or All if there is no
+  10Y range"); Jev only answers DONE on visible evidence, so it stops at a near miss.
 - **`--text`**: Jev chooses, it never generates. Pass every string the task needs typed, one
   `--text` each: search queries, names, form values. Extract them from the user's request.
   Jev decides which value goes in which field. With no `--text`, typing is not offered.
 - **`--url`**: start as close to the task as you can (the site itself, not a search engine).
 - `--screenshot out.png` saves the final page; `--headless` hides the window; `--close` closes
   the tab or window at the end (by default it stays open so the user can see the result);
-  `--max-steps N` caps actions (default 25).
+  `--max-steps N` caps actions (default 100).
 - `--browser`: `auto` (default) uses the user's own browser when it allows remote debugging,
   else a dedicated Jev window that is reused across runs. `yours` and `own` force either.
 

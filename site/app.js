@@ -286,7 +286,7 @@ async function executeLive() {
     } else if (d.operation === "ENTER") {
       const node = live.lastTyped; node?.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); node?.form?.requestSubmit();
     }
-    live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, fingerprint: fingerprint(live.page) });
+    live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, href: d.e?.href, fingerprint: fingerprint(live.page) });
     await new Promise(r => setTimeout(r, 500));
     $("ask").disabled = false; $("status").textContent = "Executed by the skill. Ask Jev for the next step.";
     return "ok";

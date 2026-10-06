@@ -58,7 +58,7 @@ async function main() {
       goal: { type: "string" },
       text: { type: "string", multiple: true, default: [] },
       secret: { type: "string" },
-      "max-steps": { type: "string", default: "25" },
+      "max-steps": { type: "string", default: "100" },
       screenshot: { type: "string" },
       trace: { type: "string" },
       browser: { type: "string", default: "auto" },
@@ -72,7 +72,7 @@ async function main() {
 
   --text <value>       A string Jev may type into a field. Repeat for several values.
   --secret <value>     A string typed only into password fields. Never sent to Jev, never printed.
-  --max-steps <n>      Stop after n actions (default 25).
+  --max-steps <n>      Stop after n actions (default 100).
   --screenshot <png>   Save a screenshot of the final page.
   --trace <json>       Save every step: page table, request, answers, decision, screenshot.
   --browser <mode>     auto (default): your own browser when it allows remote debugging, else a Jev window.
@@ -87,11 +87,11 @@ async function main() {
   const ask = body => askJev(key, body);
   const model = process.env.TYPESAFE_MODEL || "jev-latest";
   const url = /^[a-z]+:/i.test(args.url) ? args.url : `https://${args.url}`;
-  const maxSteps = Number(args["max-steps"]) || 25;
+  const maxSteps = Number(args["max-steps"]) || 100;
   fetch(API, { method: "HEAD" }).catch(() => {}); // open the TLS connection to Jev while the browser starts
   const chrome = await Chrome.open(args.browser, { headless: args.headless });
   const history = [], trace = { goal: args.goal, texts: args.text, secret: Boolean(args.secret), url, model, steps: [] };
-  let status = "max_steps", modelMs = 0, stale = 0, page;
+  let status = "max_steps", modelMs = 0, page;
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
 
@@ -124,10 +124,14 @@ async function main() {
       if (e) {
         const aims = operation !== "SELECT"; // a SELECT needs no coordinates
         let point = await chrome.locate(e.node, args.headless ? "" : `Jev · ${operation} · ${Math.round(decision.p * 100)}%`, aims);
-        if (!point) { // the page moved under us: observe again rather than act on a stale decision
-          trace.steps.at(-1).executed = false;
-          if (++stale > 5) { status = "blocked"; break; }
+        if (!point) { // covered, often by a hover menu the pointer left open: move it away, look once more
+          await chrome.park();
           await chrome.settle();
+          point = await chrome.locate(e.node, "", aims);
+        }
+        if (!point) { // still not actionable: record the miss so Jev sees it and the target stops being offered
+          trace.steps.at(-1).executed = false;
+          history.push({ operation, target: `${e.role} "${e.label}"`, text: shown, url: page.url, fingerprint: fingerprint(page), page_changed: false });
           continue;
         }
         if (!args.headless) { // the highlight pause is long enough for a busy page to reflow
@@ -140,7 +144,7 @@ async function main() {
       } else await chrome.enter();
       trace.steps.at(-1).executed = true;
 
-      history.push({ operation, target: e && `${e.role} "${e.label}"`, text: shown, url: page.url, fingerprint: fingerprint(page) });
+      history.push({ operation, target: e && `${e.role} "${e.label}"`, text: shown, url: page.url, href: e?.href, fingerprint: fingerprint(page) });
       await chrome.settle();
     }
     page = await chrome.observe();

@@ -216,6 +216,11 @@ class Chrome {
     ]);
   }
 
+  /** Move the pointer off the page, closing hover menus it left open, e.g. after a click navigated. */
+  async park() {
+    await this.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: -1, y: -1 });
+  }
+
   async type(node, text) {
     await this.evaluate(`(e => e.select ? e.select() : document.execCommand('selectAll'))(window.__jev.nodes.get(${Number(node)}))`);
     await this.send("Input.insertText", { text });

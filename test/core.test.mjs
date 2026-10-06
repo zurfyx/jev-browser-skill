@@ -41,6 +41,14 @@ test("ENTER is offered only straight after a TYPE", () => {
   assert.ok(!("ENTER" in after("CLICK")));
 });
 
+test("a click tried twice on the same URL is not offered again", () => {
+  const click = (url = "https://example.com/login") => ({ operation: "CLICK", target: 'link "Forgot?"', url });
+  const offeredClicks = history => Object.keys(buildRequest({ ...base, page: loginPage(), history }).targets.CLICK);
+  assert.ok(offeredClicks([click()]).includes("4"), "one try is not a loop");
+  assert.ok(!offeredClicks([click(), click()]).includes("4"));
+  assert.ok(offeredClicks([click(), click("https://example.com/other")]).includes("4"), "tries elsewhere do not count");
+});
+
 test("each target head holds only elements that operation can act on", () => {
   const { targets } = buildRequest({ ...base, page: loginPage() });
   // a text field is clickable too: clicking focuses it or opens its autocomplete
@@ -71,6 +79,41 @@ test("a password field is only a TYPE target when a secret was supplied", () => 
 test("no text values means TYPE is not offered at all", () => {
   const { offered } = buildRequest({ ...base, page: loginPage(), texts: [], secret: "" });
   assert.ok(!("TYPE" in offered));
+});
+
+test("with nothing to type, a text field is not a click target either", () => {
+  const { targets } = buildRequest({ ...base, page: loginPage(), texts: [] });
+  assert.deepEqual(Object.keys(targets.CLICK), ["3", "4"]);
+});
+
+test("with nothing to type, a search form's button is not offered", () => {
+  const page = loginPage();
+  page.elements[2].search = true;
+  assert.ok(!("3" in buildRequest({ ...base, page, texts: [] }).targets.CLICK));
+  assert.ok("3" in buildRequest({ ...base, page }).targets.CLICK, "with text it submits a real query");
+});
+
+test("a link back to a page already visited is not offered", () => {
+  const page = loginPage();
+  page.elements[3].href = "https://example.com/home";
+  const history = [{ operation: "CLICK", target: 'link "Login"', url: "https://example.com/home#top" }];
+  assert.ok(!("4" in buildRequest({ ...base, page, history }).targets.CLICK));
+  assert.ok("4" in buildRequest({ ...base, page }).targets.CLICK);
+  const redirected = [{ operation: "CLICK", target: 'link "Home"', url: "https://example.com/x", href: "https://example.com/home" }];
+  assert.ok(!("4" in buildRequest({ ...base, page, history: redirected }).targets.CLICK), "a clicked href counts even if it redirected");
+});
+
+test("repeat clicks count across #hash changes, where apps keep view state", () => {
+  const page = { ...loginPage(), url: "https://example.com/login#b" };
+  const click = hash => ({ operation: "CLICK", target: 'link "Forgot?"', url: `https://example.com/login#${hash}` });
+  assert.ok(!("4" in buildRequest({ ...base, page, history: [click("a"), click("b")] }).targets.CLICK));
+});
+
+test("internal hints never reach Jev", () => {
+  const page = loginPage();
+  Object.assign(page.elements[3], { search: true, href: "https://example.com/" });
+  const sent = buildRequest({ ...base, page }).body.state.elements[3];
+  assert.ok(!("search" in sent) && !("href" in sent));
 });
 
 test("readDecision reads the head matching the operation and ignores the rest", () => {
