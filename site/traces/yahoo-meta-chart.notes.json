@@ -1,0 +1,16 @@
+[
+  "No text values, so TYPE is never offered and the search boxes are not even click targets: a box that cannot be filled is a dead end that looks like the way. Finance wins at 0.96.",
+  "Yahoo Finance. Markets at 0.26 and Research & Tools at 0.21: the first step where the route is a real choice rather than an obvious one.",
+  "The Markets page has 412 controls, 162 past the ceiling. Two items are called Stocks, the menu and the section tab, and between them they hold three quarters of the target mass.",
+  "The Stocks click is still loading, so this is the Markets page again. No target reaches more than 0.20: calibrated probabilities saying no option looks like the way.",
+  "Most Active Stocks. META is not on today's list, so there is nothing to click that names it. Edit in screener at 0.34 is a guess, and the probabilities say so.",
+  "Edit in screener did not leave the page, and Jev moves on to Trending tickers at 0.20, still below any real conviction.",
+  "Trending has no META either. BLOCKED holds 0.29, close to its high for the run, and the targets are spread thin: Research & Tools 0.15, Edit in screener 0.14, Nvidia 0.10.",
+  "The screener hub. Advanced Chart and Advanced Charts, 0.35 and 0.34: two labels for one idea, and Jev splits evenly between them.",
+  "A chart, but of the S&P 500. Advanced Chart again, now as a link to the full charting page, at 0.47.",
+  "5Y at 0.66. The right range on the wrong symbol: the goal names Meta, the page shows ^GSPC, so this is not DONE.",
+  "The right range, still the wrong symbol. Jev opens the index itself, ^GSPC, at 0.31: its quote page is a door to the companies inside it.",
+  "The S&P 500 quote page: 706 controls, 456 skipped. Its heatmap has one region per constituent, and Heatmap region for META wins at 0.71, the most confident pick since step one.",
+  "Meta's quote page. 5Y at 0.79; DONE gets 0.13 before the range is set, because the goal asks for five years.",
+  "The five-year chart is up: DONE at 0.93. Thirteen clicks, 39 seconds, 2.8 of them in Jev, and not one keystroke."
+]
