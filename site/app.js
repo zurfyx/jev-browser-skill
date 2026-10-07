@@ -82,7 +82,7 @@ function renderStep(step, { liveFrame = false } = {}) {
   }
   $("answers").innerHTML = heads.join("");
   const what = decision.target ? `${decision.operation} → ${decision.target}${decision.option ? ` → "${decision.option}"` : ""}${decision.text ? ` ← "${decision.text}"` : ""}` : decision.operation;
-  const why = decision.operation in { DONE: 1, BLOCKED: 1 } ? OPERATIONS[decision.operation]
+  const why = decision.operation in { DONE: 1, BLOCKED: 1, WAIT: 1 } ? OPERATIONS[decision.operation]
     : decision.operation === "ENTER" ? "no target needed: Enter goes to the field just typed into"
     : (headUsed in answers ? `read ${headUsed} only` : `only one ${decision.operation} candidate, so no ${headUsed} question was needed`) +
       `; ${Object.keys(answers).filter(n => n !== "operation" && n !== headUsed).join(", ") || "nothing"} discarded`;

@@ -155,6 +155,15 @@ test("a terminal answer carries no target", () => {
   }
 });
 
+test("WAIT is always offered and carries no target, even on a blank page", () => {
+  const blank = { url: "https://example.com/", title: "", text: "", elements: [] };
+  const req = buildRequest({ ...base, page: blank });
+  assert.deepEqual(Object.keys(req.offered).sort(), ["BLOCKED", "DONE", "WAIT"]);
+  const d = readDecision({ operation: { choice: "WAIT", probabilities: { WAIT: 0.9 } } }, req);
+  assert.equal(d.operation, "WAIT");
+  assert.equal(d.e, undefined);
+});
+
 test("every offered operation ships a description for Jev to choose on", () => {
   const { body, offered } = buildRequest({ ...base, page: withDropdown() });
   for (const [op, text] of Object.entries(body.questions.operation.criteria)) {

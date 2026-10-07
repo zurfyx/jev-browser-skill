@@ -100,7 +100,7 @@ async function main() {
     while (history.length < maxSteps) {
       page = await chrome.observe();
       if (history.length) history.at(-1).page_changed ??= history.at(-1).fingerprint !== fingerprint(page);
-      const stuck = history.slice(-3);
+      const stuck = history.filter(h => !h.missed).slice(-3); // a skipped click is not the page ignoring us
       if (stuck.length === 3 && stuck.every(h => h.page_changed === false)) { status = "blocked"; break; }
       if (page.omitted) console.error(`   warning: ${page.omitted} controls beyond the first 250 were not offered to Jev (255-choice limit per question)`);
 
@@ -121,6 +121,7 @@ async function main() {
       });
       if (operation === "DONE" || operation === "BLOCKED") { status = operation.toLowerCase(); break; }
 
+      let acted = 0;
       if (e) {
         const aims = operation !== "SELECT"; // a SELECT needs no coordinates
         let point = await chrome.locate(e.node, args.headless ? "" : `Jev · ${operation} · ${Math.round(decision.p * 100)}%`, aims);
@@ -131,20 +132,24 @@ async function main() {
         }
         if (!point) { // still not actionable: record the miss so Jev sees it and the target stops being offered
           trace.steps.at(-1).executed = false;
-          history.push({ operation, target: `${e.role} "${e.label}"`, text: shown, url: page.url, fingerprint: fingerprint(page), page_changed: false });
+          console.log("   skipped: the target was covered or off screen, so nothing was clicked");
+          history.push({ operation, target: `${e.role} "${e.label}"`, text: shown, url: page.url, fingerprint: fingerprint(page), page_changed: false, missed: true });
           continue;
         }
         if (!args.headless) { // the highlight pause is long enough for a busy page to reflow
           await sleep(300);
           point = (await chrome.locate(e.node, "", aims)) ?? point;
         }
+        acted = performance.now();
         if (operation === "SELECT") await chrome.select(e.node, option.value);
         else await chrome.click(point);
         if (operation === "TYPE") await chrome.type(e.node, text);
-      } else await chrome.enter();
+      } else if (operation === "ENTER") { acted = performance.now(); await chrome.enter(); }
+      else await sleep(250); // WAIT: give the page a moment, then observe again
       trace.steps.at(-1).executed = true;
 
       history.push({ operation, target: e && `${e.role} "${e.label}"`, text: shown, url: page.url, href: e?.href, fingerprint: fingerprint(page) });
+      if (acted) await chrome.react(page, acted, e?.href);
       await chrome.settle();
     }
     page = await chrome.observe();

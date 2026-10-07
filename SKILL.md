@@ -57,6 +57,9 @@ Each step prints one line: operation, target, Jev's probability, Jev latency, el
  3  DONE                                                                    p=1.00   197ms  +10.3s
 ```
 
+A `skipped:` line under a step means its target was covered or off screen, so nothing was clicked;
+Jev sees the miss and picks something else.
+
 Then a JSON summary: `status` (`done`, `blocked`, `max_steps`), `steps`, `seconds`,
 `jev_seconds`, final `url`, `title` and visible `page_text`. Answer the user's question from
 `page_text` (or the screenshot). Exit code is 0 only for `done`.
@@ -66,7 +69,7 @@ missing `--text` value. Report the step log and timings to the user; the speed i
 
 ## Operations
 
-`CLICK`, `TYPE`, `SELECT`, `ENTER`, `DONE`, `BLOCKED`. Only operations that are possible on the
+`CLICK`, `TYPE`, `SELECT`, `ENTER`, `WAIT`, `DONE`, `BLOCKED`. Only operations that are possible on the
 current page are offered, and Jev can only answer with an index into the observed element table.
 The whole page is observed and targets are scrolled into view, so there is no scroll operation.
 Model output never becomes a selector or code.
