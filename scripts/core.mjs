@@ -18,7 +18,9 @@ Do not toggle a checkbox or radio that is already in the requested state.
 If recent actions show a route is not working, or it needs an operation that is not offered,
 take another route: menus, tabs, lists and links can reach the same page.
 DONE requires visible evidence that every requirement of the goal is satisfied.
-BLOCKED means no offered operation can make progress.`;
+BLOCKED means no offered operation can make progress.
+WAIT when the page is blank, still loading or mid-transition, so acting now would be on a page
+that is not there yet. A page that is complete but unhelpful is not a reason to WAIT.`;
 
 const TARGET_RULES = `Choose the best target assuming the next operation is the one named here.
 Another question decides the operation. Do not pick a field that already holds the requested value.`;
@@ -30,6 +32,7 @@ export const OPERATIONS = {
   ENTER: "Press Enter in the field that was just typed into, submitting it.",
   DONE: "Every requirement of the goal is visibly satisfied.",
   BLOCKED: "No offered operation can make progress.",
+  WAIT: "The page is blank or still loading; look again before acting.",
 };
 
 // Runs inside the page. Lists the visible, enabled controls of the whole page and keeps a
@@ -93,6 +96,12 @@ const SNAPSHOT = `(() => {
     if (!visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
     const r = e.getBoundingClientRect(), kind = role(e);
     if (!kind || !r.width || !r.height) continue;
+    if (r.bottom + scrollY <= 0 || r.right + scrollX <= 0) continue; // placed off the page, like a skip link
+    const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
+    if (cx >= 0 && cy >= 0 && cx < innerWidth && cy < innerHeight) { // on screen: offer it only if a click would land on it
+      const hit = document.elementFromPoint(cx, cy);
+      if (hit && !e.contains(hit) && !hit.contains(e)) continue;
+    }
     const item = { node: identity(e), role: kind, label: name(e) || kind, rect: { x: r.x, y: r.y, w: r.width, h: r.height } };
     if (e.closest('[role="search"],search')) item.search = true;
     const href = e.getAttribute('href');

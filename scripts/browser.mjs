@@ -139,6 +139,11 @@ class Chrome {
     });
     this.socket.onmessage = event => {
       const message = JSON.parse(event.data);
+      // The main frame's id is the target id. Note when it starts navigating and when that ends.
+      if (message.method === "Page.frameRequestedNavigation" || message.method === "Page.frameStartedLoading") {
+        if (message.params.frameId === this.targetId) this.navigationStarted = performance.now();
+      } else if (message.method === "Page.frameNavigated" ? !message.params.frame.parentId
+        : message.method === "Page.frameStoppedLoading" && message.params.frameId === this.targetId) this.navigationEnded = performance.now();
       const waiter = this.pending.get(message.id);
       if (!waiter) return;
       this.pending.delete(message.id);
@@ -155,10 +160,13 @@ class Chrome {
     await this.send("Emulation.setFocusEmulationEnabled", { enabled: true }); // keep rendering if the tab is not in front
   }
 
-  send(method, params = {}, sessionId = this.session) {
+  send(method, params = {}, sessionId = this.session, timeout = 20000) {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
-      this.pending.set(id, { resolve, reject });
+      // A page can stop answering, e.g. while a dialog is open. Without a bound, the run hangs.
+      const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`${method} got no reply in ${timeout / 1000}s`)); }, timeout);
+      const settle = fn => value => { clearTimeout(timer); fn(value); };
+      this.pending.set(id, { resolve: settle(resolve), reject: settle(reject) });
       this.socket.send(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }));
     });
   }
@@ -166,23 +174,51 @@ class Chrome {
   /** Evaluate in the page. Returns undefined while the document is navigating. */
   async evaluate(expression) {
     try {
-      const response = await this.send("Runtime.evaluate", { expression, returnByValue: true });
+      const response = await this.send("Runtime.evaluate", { expression, returnByValue: true }, this.session, 5000);
       return response.exceptionDetails ? undefined : response.result.value;
-    } catch {
+    } catch (error) {
+      if (/no reply/.test(error.message)) console.error(`   warning: the page did not answer for 5s (${error.message})`);
       return undefined;
     }
   }
 
-  /** Wait for the DOM to be usable; give slow subresources a short grace period, not a veto. */
+  /**
+   * After an action, wait for the outcome it should have. A link to another page should change the
+   * URL: a single-page app can take most of a second to do it, and live prices tick meanwhile, so
+   * nothing else counts. Any other action should change the controls (a menu opens, a view
+   * re-renders) or a field value; page text is ignored for the same reason. No change after a
+   * second means the action had none.
+   */
+  async react(before, since, href) {
+    const done = why => process.env.JEV_DEBUG && console.error(`   react: ${why} after ${Math.round(performance.now() - since)}ms`);
+    const bare = url => url?.split("#")[0];
+    const controls = page => JSON.stringify([page.url, page.elements.map(e => [e.node, e.value, e.checked, e.expanded])]);
+    const expected = href && bare(href) !== bare(before.url) ? bare(before.url) : null;
+    while (performance.now() < since + (expected ? 5000 : 8000)) {
+      const navigating = this.navigationStarted > since && !(this.navigationEnded > this.navigationStarted);
+      if (!navigating) {
+        if (this.navigationEnded > since) return done("new document");
+        if (expected) {
+          if (bare(await this.evaluate("location.href")) !== expected) return done("url changed");
+        } else {
+          const page = await this.evaluate(SNAPSHOT);
+          if (page && controls(page) !== controls(before)) return done("controls changed");
+          if (performance.now() > since + 1000) return done("no change");
+        }
+      }
+      await sleep(60);
+    }
+    done(expected ? "link did not navigate" : "navigation still running");
+  }
+
+  /**
+   * Wait until the document is parsed, not until it has loaded. Jev reads the element table and
+   * the visible text; images, ads and trackers change neither, and on a busy page they hold off
+   * "complete" for seconds. observe() then waits for the table itself to stop changing.
+   */
   async settle() {
     await sleep(80);
-    let grace = 12;
-    for (let i = 0; i < 150; i++) {
-      const state = await this.evaluate("document.readyState");
-      if (state === "complete" || (state === "interactive" && --grace < 0)) break;
-      await sleep(100);
-    }
-    await sleep(100);
+    for (let i = 0; i < 150 && (await this.evaluate("document.readyState")) === "loading"; i++) await sleep(100);
   }
 
   async goto(url) {
@@ -193,13 +229,22 @@ class Chrome {
   /** Read the page, then read it again a beat later: act on a page that has stopped changing. */
   async observe() {
     let previous = null;
-    for (let i = 0; i < 40; i++) {
+    // A page that never settles is observed as it is after 10s. One that has not answered at all
+    // is busy, e.g. redrawing a chart, and gets up to 30s.
+    const started = performance.now();
+    let snapshots = 0;
+    const done = (page, how) => {
+      if (process.env.JEV_DEBUG) console.error(`   observe: ${how} after ${Math.round(performance.now() - started)}ms, ${snapshots} snapshots`);
+      return page;
+    };
+    while (performance.now() < started + (previous ? 10000 : 30000)) {
       const page = await this.evaluate(SNAPSHOT);
-      if (page && previous && fingerprint(page) === fingerprint(previous)) return page;
+      snapshots++;
+      if (page && previous && fingerprint(page) === fingerprint(previous)) return done(page, "settled");
       previous = page;
       await sleep(page ? 120 : 100);
     }
-    if (previous) return previous;
+    if (previous) return done(previous, "still changing");
     throw new Error("Page did not become readable");
   }
 
