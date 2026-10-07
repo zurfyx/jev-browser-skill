@@ -1,13 +1,13 @@
 # Jev Browser Skill
 
 > [!IMPORTANT]
-> **This is a reference implementation, built to be read.** Three short files, six operations, no dependencies, and a step-by-step explainer site: [jev-browser.vercel.app](https://jev-browser.vercel.app). It works on ordinary pages and stops exactly where the interesting limits are. For the complete, production-grade version of the same idea, with a live inspector, region narrowing, stale-page guards and a text-generating helper model, see [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), which this skill follows. To wire Jev into your own project, point your coding agent at `scripts/core.mjs`, that repo, and this README.
+> **This is a reference implementation, built to be read.** Three short files, seven operations, no dependencies, and a step-by-step explainer site: [jev-browser.vercel.app](https://jev-browser.vercel.app). It works on ordinary pages and stops exactly where the interesting limits are. For the complete, production-grade version of the same idea, with a live inspector, region narrowing, stale-page guards and a text-generating helper model, see [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), which this skill follows. To wire Jev into your own project, point your coding agent at `scripts/core.mjs`, that repo, and this README.
 
 **Let [Jev](https://typesafe.ai) drive your browser.** A plug-and-play skill for Claude Code and Codex: you name a site and a goal, Jev clicks, types and selects its way there, a few hundred milliseconds per decision.
 
 <a href="docs/demo.mp4"><img src="docs/demo.gif" alt="Jev logging in to Hacker News, searching for Jev and opening the top thread, at 1× speed" width="100%" /></a>
 
-*Hacker News at 1× speed, one goal: log in, search for "Jev", open the first result's comments. Eight decisions, eight seconds.* [Watch the MP4](docs/demo.mp4) · [Step through it](https://jev-browser.vercel.app)
+*Hacker News at 1× speed, one goal: log in, search for "Jev", open the first result's comments. Nine decisions, eight seconds.* [Watch the MP4](docs/demo.mp4) · [Step through it](https://jev-browser.vercel.app)
 
 ## How Jev decides
 
@@ -35,7 +35,8 @@ Here is the real third step of the video, on the Hacker News login page, after t
   "operation": {
     "type": "choice",
     "criteria": { "CLICK": "Click a link, button, …", "TYPE": "Type one of the provided text values …",
-                  "ENTER": "Press Enter …", "DONE": "Every requirement …", "BLOCKED": "No offered operation …" },
+                  "ENTER": "Press Enter …", "DONE": "Every requirement …", "BLOCKED": "No offered operation …",
+                  "WAIT": "The page is blank or still loading …" },
     "instructions": { "goal": "Log in to Hacker News as zurfyx, then search for Jev and open the top result's comments.", "rules": "…" }
   },
   "click_target": { "type": "choice", "criteria": { "3": { "element": "[3] button \"login\"" }, "4": { … }, … } },
@@ -44,13 +45,13 @@ Here is the real third step of the video, on the Hacker News login page, after t
 }
 ```
 
-Only operations that are possible right now are offered, and each target head lists only the elements that operation makes sense on. `ENTER` appears because the previous action was `TYPE`; `SELECT` is absent because the page has no dropdown.
+Only operations that are possible right now are offered, and each target head lists only the elements that operation makes sense on. `ENTER` appears because the previous action was `TYPE`; `SELECT` is absent because the page has no dropdown; `WAIT` is always on offer, for a page that is blank or still loading.
 
 **3. Jev answers every question at once.** A key from each dictionary, and the full distribution.
 
 ```json
-"operation":    { "choice": "TYPE", "probabilities": { "TYPE": 0.91, "BLOCKED": 0.06, "CLICK": 0.02, "ENTER": 0.01, "DONE": 0 } },
-"click_target": { "choice": "3",    "probabilities": { "3": 0.79, "5": 0.13, "1": 0.07, "4": 0.01 } },
+"operation":    { "choice": "TYPE", "probabilities": { "TYPE": 0.95, "BLOCKED": 0.03, "CLICK": 0.01, "WAIT": 0.01, "ENTER": 0, "DONE": 0 } },
+"click_target": { "choice": "3",    "probabilities": { "3": 0.72, "5": 0.21, "1": 0.06, "4": 0.01 } },
 "type_target":  { "choice": "2",    "probabilities": { "2": 1.00, "1": 0, "5": 0, "6": 0 } }
 ```
 
@@ -59,14 +60,15 @@ Only operations that are possible right now are offered, and each target head li
 **5. Execute.** [`browser.mjs`](scripts/browser.mjs) resolves index 2 back to the exact DOM node it observed, scrolls it into view, and types with real keyboard events. Then the loop observes again.
 
 ```text
- 1  CLICK       link "login"                                p=0.56   348ms  +0.9s
- 2  TYPE        textbox "username:" ← "zurfyx"             p=0.99   378ms  +2.2s
- 3  TYPE        password "password:" ← "••••••"            p=0.93   158ms  +3.0s
- 4  CLICK       button "login"                             p=0.92   140ms  +3.9s
- 5  TYPE        textbox "q" ← "Jev"                        p=0.96   532ms  +5.4s
- 6  ENTER                                                  p=0.90   290ms  +6.4s
- 7  CLICK       link "510 comments"                        p=0.78   292ms  +7.6s
- 8  DONE                                                   p=0.70   300ms  +9.1s
+ 1  CLICK       link "login"                                p=0.51   268ms  +0.7s
+ 2  TYPE        textbox "username:" ← "zurfyx"             p=0.99   273ms  +1.5s
+ 3  TYPE        password "password:" ← "••••••"            p=0.95   123ms  +2.2s
+ 4  CLICK       button "login"                             p=0.93   133ms  +2.9s
+ 5  TYPE        textbox "q" ← "Jev"                        p=0.97   495ms  +4.2s
+ 6  ENTER                                                  p=0.91   211ms  +4.9s
+ 7  WAIT                                                   p=0.70   159ms  +5.9s
+ 8  CLICK       link "520 comments"                        p=0.87   376ms  +6.8s
+ 9  DONE                                                   p=0.73   197ms  +7.9s
 ```
 
 ## What the limits teach
@@ -74,18 +76,18 @@ Only operations that are possible right now are offered, and each target head li
 Each place this implementation stops is a lesson about Jev, and the [site](https://jev-browser.vercel.app) walks through all of them on the real trace.
 
 - **Jev chooses, it never generates.** The strings to type arrive as `--text` values and go into the request as `text_values`; Jev picks which value belongs in the chosen field. A `--secret` is typed only into password fields and never enters a request: Jev sees that a password field exists and whether it is filled, never the value. The complete version adds a small LLM to write field text; this one does not.
-- **At most 255 options per question.** So this skill offers the first 250 controls of a page and warns in the log when it skipped some. The Hacker News front page has 227. A product grid has more, and needs a first question that narrows to a region, which is what jev-ultrafast does.
+- **At most 255 options per question.** So this skill offers the first 250 controls of a page and warns in the log when it skipped some. The Hacker News front page has 231. A product grid has more, and needs a first question that narrows to a region, which is what jev-ultrafast does.
 - **The probabilities are calibrated, and that is the debugging tool.** While building the login demo Jev answered `BLOCKED 0.31` right after the password. The labels were the problem: the fields were named `acct` and `pw`, and the link and the button were both called `login`. Better labels in the table, and roles in the history, took it to `CLICK login 0.89`. `JEV_DEBUG=1` prints these distributions at every step.
 - **Jev is stateless.** Every step is an independent request. The only memory it has is the `recent_actions` list the code chooses to send, which is why the history records the role and URL of each action and not just a label.
-- **Cost.** A step is 3 to 6k input tokens; output is free. At Jev's list price that is a fraction of a cent per decision, and the whole eight-step demo costs less than a tenth of a cent. Each response reports its `usage`, and the trace keeps it.
+- **Cost.** A step is 1k to 30k input tokens, almost all of it the page: a blank page costs 1k, the Hacker News front page 18k. Output is free. At Jev's list price that is under a tenth of a cent per decision, and the whole nine-step demo costs about half a cent. Each response reports its `usage`, and the trace keeps it.
 
-Measured on a MacBook with a warm Jev window, wall clock from launch to `DONE`:
+Measured on a MacBook with a fresh Jev window per run, wall clock from the first page load to `DONE`:
 
 | Task | Steps | Total | Time in Jev |
 | --- | --- | --- | --- |
-| Wikipedia: search and open an article | 2 | 3.4s | 1.0s |
-| Selenium web form: two fields, a dropdown, a checkbox, submit | 5 | 5.1s | 1.4s |
-| Hacker News: log in, search for Jev, open the top thread's comments (the video) | 7 | 9.3s | 2.4s |
+| Wikipedia: search and open an article | 2 | 3.1s | 0.7s |
+| Selenium web form: two fields, a dropdown, a checkbox, submit | 5 | 4.2s | 1.0s |
+| Hacker News: log in, search for Jev, open the top thread's comments (the video) | 8 | 8.1s | 2.2s |
 
 The rest is the page itself loading and rendering.
 

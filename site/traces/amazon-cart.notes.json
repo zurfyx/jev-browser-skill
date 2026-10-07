@@ -1,10 +1,11 @@
 [
-  "The front page, 241 controls and nothing skipped yet. One string was supplied, one field is editable, so no target question was needed.",
-  "CLICK 0.70 against ENTER 0.29: submitting the box or pressing the button both work, and Jev took the button at 0.86.",
-  "Search results: 250 controls offered and 698 skipped. A thousand-element page, four times the ceiling, and the product link still wins at 0.34 over the inline Add to cart at 0.17.",
-  "The product page. Three things are labelled some form of Add to cart, including an off-screen accessibility helper; Jev took the real one at 0.60.",
-  "An upsell for a protection plan, five controls and nothing else reachable. Nothing in the goal mentions it. BLOCKED held 0.22 before Jev dismissed it at 0.78.",
-  "Back on the product page. Two links lead to the cart and Jev preferred the visible one, 0.66 against 0.31 for the keyboard-shortcut link.",
-  "The cart. The delete button carries the product name, which is how Jev tells it from the search box and the Go to Cart link beside it.",
-  "The cart is empty again, so the goal is met: DONE at 0.89."
+  "Amazon's front page has opened but not rendered: no controls, no text. WAIT at 0.78 against BLOCKED at 0.22, and the skill looks again.",
+  "The front page, 159 controls. One string was supplied and one field is editable, so no target question was needed: TYPE at 0.99.",
+  "CLICK 0.71 against ENTER 0.29: submitting the box or pressing the button both work, and Jev took the button at 0.93.",
+  "Search results: 250 controls offered and 711 skipped, nearly four times the ceiling. The first keyboard link is a Logitech at [27]; Jev took a GravaStar at 0.32, with its inline Add to cart at 0.14. Which result is the top one is a judgment.",
+  "The product page has three controls labelled Add to cart. Jev took the first, [38], at 0.72 over [135] at 0.19, and the upsell that follows shows it was the real one.",
+  "An upsell for a protection plan, five controls and nothing else reachable. Nothing in the goal mentions it, and No thanks wins its head at 1.00.",
+  "The upsell closed, but Amazon was already on its way to the cart. Jev, still looking at the product page, asked for Add to Cart again; the button was gone by the time of the click, so the skill skipped it rather than click whatever had taken its place.",
+  "The cart. The delete button carries the product name, which is how Jev tells it from the search box and the Go to Cart link: 0.90.",
+  "The cart is empty again, so the goal is met: DONE at 0.94."
 ]
