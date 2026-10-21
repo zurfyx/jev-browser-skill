@@ -1,13 +1,13 @@
 # Jev Browser Skill
 
 > [!IMPORTANT]
-> **This is a reference implementation, built to be read.** Three short files, seven operations, no dependencies, and a step-by-step explainer site: [jev-browser.vercel.app](https://jev-browser.vercel.app). It works on ordinary pages and stops exactly where the interesting limits are. For the complete, production-grade version of the same idea, with a live inspector, region narrowing, stale-page guards and a text-generating helper model, see [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), which this skill follows. To wire Jev into your own project, point your coding agent at `scripts/core.mjs`, that repo, and this README.
+> **This is a reference implementation, built to be read.** Three short files, seven operations, no dependencies, and a step-by-step explainer site: [jev-browser.rovira.sh](https://jev-browser.rovira.sh). It works on ordinary pages and stops exactly where the interesting limits are. For the complete, production-grade version of the same idea, with a live inspector, region narrowing, stale-page guards and a text-generating helper model, see [browser-use/jev-ultrafast](https://github.com/browser-use/jev-ultrafast), which this skill follows. To wire Jev into your own project, point your coding agent at `scripts/core.mjs`, that repo, and this README.
 
 **Let [Jev](https://typesafe.ai) drive your browser.** A plug-and-play skill for Claude Code and Codex: you name a site and a goal, Jev clicks, types and selects its way there, a few hundred milliseconds per decision.
 
 <a href="docs/demo.mp4"><img src="docs/demo.gif" alt="Jev logging in to Hacker News, searching for Jev and opening the top thread, at 1× speed" width="100%" /></a>
 
-*Hacker News at 1× speed, one goal: log in, search for "Jev", open the first result's comments. Nine decisions, eight seconds.* [Watch the MP4](docs/demo.mp4) · [Step through it](https://jev-browser.vercel.app)
+*Hacker News at 1× speed, one goal: log in, search for "Jev", open the first result's comments. Nine decisions, eight seconds.* [Watch the MP4](docs/demo.mp4) · [Step through it](https://jev-browser.rovira.sh)
 
 ## How Jev decides
 
@@ -73,7 +73,7 @@ Only operations that are possible right now are offered, and each target head li
 
 ## What the limits teach
 
-Each place this implementation stops is a lesson about Jev, and the [site](https://jev-browser.vercel.app) walks through all of them on the real trace.
+Each place this implementation stops is a lesson about Jev, and the [site](https://jev-browser.rovira.sh) walks through all of them on the real trace.
 
 - **Jev chooses, it never generates.** The strings to type arrive as `--text` values and go into the request as `text_values`; Jev picks which value belongs in the chosen field. A `--secret` is typed only into password fields and never enters a request: Jev sees that a password field exists and whether it is filled, never the value. The complete version adds a small LLM to write field text; this one does not.
 - **At most 255 options per question.** So this skill offers the first 250 controls of a page and warns in the log when it skipped some. The Hacker News front page has 231. A product grid has more, and needs a first question that narrows to a region, which is what jev-ultrafast does.
@@ -153,7 +153,7 @@ node ~/.claude/skills/jev-browser/scripts/jev.mjs \
 | `--goal` | The whole task in a sentence or two, including what "done" looks like |
 | `--text` | A string Jev may type. Repeat for several values |
 | `--secret` | A string typed only into password fields, never sent to Jev or printed |
-| `--trace run.json` | Save every step: element table, request, answers, decision, screenshot. Drop it on the [site](https://jev-browser.vercel.app) to step through it |
+| `--trace run.json` | Save every step: element table, request, answers, decision, screenshot. Drop it on the [site](https://jev-browser.rovira.sh) to step through it |
 | `--screenshot out.png` | Save the final page |
 | `--browser` | `auto` (default), `yours`, `own`, or `host:port` |
 | `--headless` | No window |
@@ -169,7 +169,7 @@ SKILL.md              what your agent reads
 scripts/core.mjs      the part worth reading: observe, ask, validate. No Node APIs; the site runs this same file
 scripts/browser.mjs   plumbing: a 150-line Chrome DevTools client, launch or attach
 scripts/jev.mjs       the loop, the command line, the log, --trace
-site/                 the explainer, jev-browser.vercel.app: replays traces, or runs the loop live with your key
+site/                 the explainer, jev-browser.rovira.sh: replays traces, or runs the loop live with your key
 docs/                 the video, the diagram (editable .excalidraw + embedded-scene .svg)
 ```
 
