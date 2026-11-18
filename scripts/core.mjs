@@ -70,6 +70,41 @@ const SNAPSHOT = `(() => {
     (['INPUT', 'SELECT', 'TEXTAREA'].includes(e.tagName) ? '' : clean(e.innerText)) ||
     clean(e.getAttribute('title')) || clean(e.getAttribute('placeholder')) || nearby(e) ||
     clean(e.getAttribute('name')) || clean(e.querySelector?.('img[alt]')?.alt);
+  // The question a radio or checkbox answers, since "Yes" and "No" repeat down a form. Its group is
+  // the smallest ancestor holding two choices of its kind. Climbing from there through ancestors
+  // that hold only this group's choices (a few levels), the question is the text inside one before
+  // its first choice (a heading, a legend, a table row's first cell), or that ancestor's legend or
+  // accessible name; else the short block just before the highest one, unless that block holds
+  // choices too: then it is the previous question, not this one. Counted once per snapshot.
+  const choiceOf = { radio: 'input[type="radio"],[role="radio"]', checkbox: 'input[type="checkbox"],[role="checkbox"]' };
+  const tally = {};
+  for (const kind in choiceOf) {
+    tally[kind] = new Map();
+    for (const c of document.querySelectorAll(choiceOf[kind]))
+      for (let n = c.parentElement; n && n !== document.body; n = n.parentElement) tally[kind].set(n, (tally[kind].get(n) || 0) + 1);
+  }
+  const short = s => { const text = (s || '').replace(/\\s+/g, ' ').trim(); return text.length <= 150 ? text : ''; };
+  const labelledBy = n => (n.getAttribute('aria-labelledby') || '').split(/\\s+/).map(id => document.getElementById(id)?.innerText || '').join(' ');
+  const asked = new Map();
+  const question = (e, kind) => {
+    let g = e.parentElement;
+    while (g && g !== document.body && (tally[kind].get(g) || 0) < 2) g = g.parentElement;
+    if (!g || g === document.body) return '';
+    if (!asked.has(g)) {
+      const first = g.querySelector(choiceOf[kind]), count = tally[kind].get(g);
+      let found = '', top = g;
+      for (let n = g, depth = 0; !found && n && n !== document.body && tally[kind].get(n) === count && depth < 4; n = n.parentElement, depth++) {
+        const before = document.createRange();
+        before.setStart(n, 0); before.setEndBefore(first);
+        found = short(before.toString()) || short(n.querySelector('legend')?.innerText) ||
+          short(n.getAttribute('aria-label')) || short(labelledBy(n));
+        top = n;
+      }
+      const prev = top.previousElementSibling;
+      asked.set(g, found || (prev && !prev.querySelector(choiceOf.radio + ',' + choiceOf.checkbox) ? short(prev.innerText) : ''));
+    }
+    return asked.get(g);
+  };
   const roles = ['button', 'link', 'checkbox', 'radio', 'switch', 'tab', 'menuitem', 'option',
     'combobox', 'textbox', 'searchbox', 'spinbutton'];
   const role = e => {
@@ -107,6 +142,7 @@ const SNAPSHOT = `(() => {
     const href = e.getAttribute('href');
     if (e.tagName === 'A' && href && !/^(#|javascript:)/i.test(href)) item.href = e.href.split('#')[0];
     if (['checkbox', 'radio'].includes(e.type)) item.checked = e.checked;
+    if (kind in choiceOf) { const q = question(e, kind); if (q) item.group = q; }
     for (const key of ['checked', 'selected', 'expanded']) {
       const value = e.getAttribute('aria-' + key);
       if (value !== null) item[key] = value;
@@ -182,8 +218,11 @@ export function pick(answer, offered) {
   return { choice: answer.choice, p: answer.probabilities?.[answer.choice] ?? answer.confidence ?? 0 };
 }
 
+/** How code and history name a control. A choice carries its question, so two "No" radios differ. */
+export const targetName = e => `${e.role} "${e.label}"` + (e.group ? ` for "${e.group}"` : "");
+
 export const describe = e => ({
-  element: `[${e.index}] ${e.role} "${e.label}"`,
+  element: `[${e.index}] ${targetName(e)}`,
   ...(e.value !== undefined ? { current_value: e.value } : {}),
   ...Object.fromEntries(["checked", "selected", "expanded"].filter(k => k in e).map(k => [k, e[k]])),
 });
@@ -198,6 +237,11 @@ export const describe = e => ({
  */
 export function buildRequest({ goal, page, texts = [], secret = "", history = [], model = "jev-latest" }) {
   page.elements.forEach((e, i) => (e.index = String(i + 1)));
+  // A choice keeps its question only where its role and label repeat and the questions tell them
+  // apart: a lone "Remember me" or a column of row checkboxes under one heading gains nothing.
+  const same = {};
+  for (const e of page.elements) if (e.group) (same[`${e.role} "${e.label}"`] ??= []).push(e);
+  for (const list of Object.values(same)) if (list.length < 2 || new Set(list.map(e => e.group)).size < 2) list.forEach(e => delete e.group);
   const last = history.at(-1);
   // Jev is stateless, so it can keep picking the same best-looking target. A click already tried
   // twice on this page is not offered again, which forces it onto another route. The #hash is
@@ -208,7 +252,7 @@ export function buildRequest({ goal, page, texts = [], secret = "", history = []
   // A link back to a page already seen in this run is a step backwards, not a new route. Clicked
   // hrefs count too: a link that redirects lands on a different URL than the one it shows.
   const visited = new Set([...history.flatMap(h => [h.url, h.href]), page.url].filter(Boolean).map(bare));
-  const exhausted = e => tried[`${e.role} "${e.label}"`] >= 2 || visited.has(e.href);
+  const exhausted = e => tried[targetName(e)] >= 2 || visited.has(e.href);
   const targets = { CLICK: {}, TYPE: {}, SELECT: {} };
   for (const e of page.elements) {
     if (e.op === "SELECT") {

@@ -1,6 +1,6 @@
 // The explainer. Replay mode steps through a --trace file. Live mode runs the same loop as the
 // skill inside a sandboxed iframe, using scripts/core.mjs unchanged and /api/jev for the request.
-import { SNAPSHOT, LOCATE, OPERATIONS, decide, fingerprint } from "/scripts/core.mjs";
+import { SNAPSHOT, LOCATE, OPERATIONS, decide, fingerprint, targetName } from "/scripts/core.mjs";
 import { samples } from "/site/samples.js";
 
 const $ = id => document.getElementById(id);
@@ -262,7 +262,7 @@ async function askLive() {
     const decision = await decide(ask, { goal, page, texts, secret, history: live.history });
     const { operation, e, option, text } = decision;
     const step = { elapsed_ms: Math.round(performance.now() - live.started), page, calls: decision.calls, secretOffered: Boolean(secret),
-      decision: { operation, target: e && `[${e.index}] ${e.role} "${e.label}"`, option: option?.label, text: decision.secret ? "••••••" : text, p: decision.p, ms: decision.ms }, raw: decision };
+      decision: { operation, target: e && `[${e.index}] ${targetName(e)}`, option: option?.label, text: decision.secret ? "••••••" : text, p: decision.p, ms: decision.ms }, raw: decision };
     live.steps.push(step); live.page = page; live.decision = decision; liveReadout();
     renderStep(step, { liveFrame: true });
     renderSteps(live.steps, live.steps.length - 1, i => renderStep(live.steps[i], { liveFrame: true }));
@@ -286,7 +286,7 @@ async function executeLive() {
     } else if (d.operation === "ENTER") {
       const node = live.lastTyped; node?.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); node?.form?.requestSubmit();
     }
-    live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, href: d.e?.href, fingerprint: fingerprint(live.page) });
+    live.history.push({ operation: d.operation, target: d.e && targetName(d.e), text: d.secret ? "••••••" : d.text, url: live.page.url, href: d.e?.href, fingerprint: fingerprint(live.page) });
     await new Promise(r => setTimeout(r, 500));
     $("ask").disabled = false; $("status").textContent = "Executed by the skill. Ask Jev for the next step.";
     return "ok";
