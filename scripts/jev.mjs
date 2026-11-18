@@ -55,7 +55,7 @@ async function main() {
   const { values: args } = parseArgs({
     options: {
       url: { type: "string" },
-      goal: { type: "string" },
+      goal: { type: "string", multiple: true, default: [] },
       text: { type: "string", multiple: true, default: [] },
       secret: { type: "string" },
       "max-steps": { type: "string", default: "100" },
@@ -67,12 +67,15 @@ async function main() {
       help: { type: "boolean", short: "h", default: false },
     },
   });
-  if (args.help || !args.url || !args.goal) {
-    console.log(`Usage: jev.mjs --url <url> --goal "<goal>" [--text "<value to type>"]...
+  if (args.help || !args.url || !args.goal.length || args.goal.some(goal => !goal.trim())) {
+    console.log(`Usage: jev.mjs --url <url> --goal "<goal>" [--goal "<next goal>"]... [--text "<value to type>"]...
+
+  --goal <goal>        What to achieve. Repeat for a sequence: when Jev answers DONE, the next goal
+                       starts on the same page with a fresh history.
 
   --text <value>       A string Jev may type into a field. Repeat for several values.
   --secret <value>     A string typed only into password fields. Never sent to Jev, never printed.
-  --max-steps <n>      Stop after n actions (default 100).
+  --max-steps <n>      Stop after n actions per goal (default 100).
   --screenshot <png>   Save a screenshot of the final page.
   --trace <json>       Save every step: page table, request, answers, decision, screenshot.
   --browser <mode>     auto (default): your own browser when it allows remote debugging, else a Jev window.
@@ -90,22 +93,27 @@ async function main() {
   const maxSteps = Number(args["max-steps"]) || 100;
   fetch(API, { method: "HEAD" }).catch(() => {}); // open the TLS connection to Jev while the browser starts
   const chrome = await Chrome.open(args.browser, { headless: args.headless });
-  const history = [], trace = { goal: args.goal, texts: args.text, secret: Boolean(args.secret), url, model, steps: [] };
-  let status = "max_steps", modelMs = 0, page;
+  const goals = args.goal, many = goals.length > 1, results = []; // results: { goal, status, steps } per goal reached
+  const history = [], trace = { goal: goals.join(" → "), ...(many ? { goals } : {}), texts: args.text, secret: Boolean(args.secret), url, model, steps: [] };
+  // g: the goal being worked on; from: its first action in history; view: the first entry Jev sees,
+  // which keeps a TYPE that ended the last goal so that ENTER is still offered after it
+  let status = "max_steps", modelMs = 0, page, g = 0, from = 0, view = 0;
   const started = performance.now();
   const elapsed = () => Math.round(performance.now() - started);
 
   try {
     await chrome.goto(url);
-    while (history.length < maxSteps) {
+    if (many) console.log(`── goal 1/${goals.length}: ${goals[0]}`);
+    while (history.length - from < maxSteps) {
       page = await chrome.observe();
       if (history.length) history.at(-1).page_changed ??= history.at(-1).fingerprint !== fingerprint(page);
-      const stuck = history.filter(h => !h.missed).slice(-3); // a skipped click is not the page ignoring us
+      const recent = history.slice(view);
+      const stuck = recent.filter(h => !h.missed).slice(-3); // a skipped click is not the page ignoring us
       if (stuck.length === 3 && stuck.every(h => h.page_changed === false)) { status = "blocked"; break; }
       if (page.omitted) console.error(`   warning: ${page.omitted} controls beyond the first 250 were not offered to Jev (255-choice limit per question)`);
 
       const screenshot = args.trace ? await chrome.screenshot() : null;
-      const decision = await decide(ask, { goal: args.goal, page, texts: args.text, secret: args.secret, history, model });
+      const decision = await decide(ask, { goal: goals[g], page, texts: args.text, secret: args.secret, history: recent, model });
       modelMs += decision.ms;
       const { operation, e, option, text } = decision;
       const shown = decision.secret ? "••••••" : text;
@@ -116,9 +124,15 @@ async function main() {
         if (decision.probabilities.target) console.error("   targets: " + top(decision.probabilities.target, k => `[${k}] ${page.elements[Number(k.split(":")[0]) - 1].label}`));
       }
       trace.steps.push({
-        elapsed_ms: elapsed(), page: { ...page, screenshot }, calls: decision.calls,
+        ...(many ? { goal: g + 1 } : {}), elapsed_ms: elapsed(), page: { ...page, screenshot }, calls: decision.calls,
         decision: { operation, target: e && `[${e.index}] ${e.role} "${e.label}"`, option: option?.label, text: shown, p: decision.p, probabilities: decision.probabilities, ms: decision.ms },
       });
+      if (operation === "DONE" && g + 1 < goals.length) { // on to the next goal, on this page
+        results.push({ goal: goals[g], status: "done", steps: history.length - from });
+        from = history.length, view = history.at(-1)?.operation === "TYPE" ? from - 1 : from;
+        console.log(`── goal ${++g + 1}/${goals.length}: ${goals[g]}`);
+        continue;
+      }
       if (operation === "DONE" || operation === "BLOCKED") { status = operation.toLowerCase(); break; }
 
       let acted = 0;
@@ -152,6 +166,7 @@ async function main() {
       if (acted) await chrome.react(page, acted, e?.href);
       await chrome.settle();
     }
+    results.push({ goal: goals[g], status, steps: history.length - from });
     page = await chrome.observe();
     if (args.screenshot) writeFileSync(args.screenshot, await chrome.screenshot("png"));
   } finally {
@@ -168,6 +183,7 @@ async function main() {
     title: page.title,
     ...(args.screenshot ? { screenshot: args.screenshot } : {}),
     page_text: page.text.slice(0, 2500),
+    ...(many ? { ...(status === "done" ? {} : { failed_goal: g + 1 }), goals: results } : {}),
   };
   if (args.trace) writeFileSync(args.trace, JSON.stringify({ ...trace, result }));
   console.log("\n" + JSON.stringify(result, null, 2));

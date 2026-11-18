@@ -150,7 +150,7 @@ node ~/.claude/skills/jev-browser/scripts/jev.mjs \
 | Flag | |
 | --- | --- |
 | `--url` | Where to start |
-| `--goal` | The whole task in a sentence or two, including what "done" looks like |
+| `--goal` | The whole task in a sentence or two, including what "done" looks like. Repeat for a sequence: when Jev answers DONE, the next goal starts on the same page with a fresh history |
 | `--text` | A string Jev may type. Repeat for several values |
 | `--secret` | A string typed only into password fields, never sent to Jev or printed |
 | `--trace run.json` | Save every step: element table, request, answers, decision, screenshot. Drop it on the [site](https://jev-browser.rovira.sh) to step through it |
@@ -158,7 +158,7 @@ node ~/.claude/skills/jev-browser/scripts/jev.mjs \
 | `--browser` | `auto` (default), `yours`, `own`, or `host:port` |
 | `--headless` | No window |
 | `--close` | Close the tab or window at the end (it stays open by default so you can see the result) |
-| `--max-steps` | Action budget, default 100 |
+| `--max-steps` | Action budget per goal, default 100 |
 
 `CHROME_PATH` overrides browser detection, `JEV_PROFILE` moves the Jev window's profile (default `~/.jev-browser/chrome`), `TYPESAFE_MODEL` overrides the model (default `jev-latest`), and `JEV_DEBUG=1` prints Jev's probabilities and per-phase timings.
 
