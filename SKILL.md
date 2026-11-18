@@ -60,6 +60,10 @@ Each step prints one line: operation, target, Jev's probability, Jev latency, el
 A `skipped:` line under a step means its target was covered or off screen, so nothing was clicked;
 Jev sees the miss and picks something else.
 
+A `WAIT` waits in code for the page to change, for up to 1s, then 2s, then 4s for each WAIT in a
+row, before Jev is asked again. A `stopped:` line means the loop ended the run as `blocked` by
+itself: the last 3 actions changed nothing, or 4 WAITs in a row saw no change.
+
 Then a JSON summary: `status` (`done`, `blocked`, `max_steps`), `steps`, `seconds`,
 `jev_seconds`, final `url`, `title` and visible `page_text`. Answer the user's question from
 `page_text` (or the screenshot). Exit code is 0 only for `done`.
