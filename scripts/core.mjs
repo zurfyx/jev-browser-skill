@@ -20,7 +20,8 @@ take another route: menus, tabs, lists and links can reach the same page.
 DONE requires visible evidence that every requirement of the goal is satisfied.
 BLOCKED means no offered operation can make progress.
 WAIT when the page is blank, still loading or mid-transition, so acting now would be on a page
-that is not there yet. A page that is complete but unhelpful is not a reason to WAIT.`;
+that is not there yet. A page that is complete but unhelpful is not a reason to WAIT.
+If page.busy is present the page is still working: WAIT, unless what the goal needs next is there.`;
 
 const TARGET_RULES = `Choose the best target assuming the next operation is the one named here.
 Another question decides the operation. Do not pick a field that already holds the requested value.`;
@@ -89,12 +90,16 @@ const SNAPSHOT = `(() => {
   };
   const selector = 'a[href],button,input,textarea,select,summary,[contenteditable="true"],' +
     roles.map(r => '[role="' + r + '"]').join(',');
-  const elements = []; let omitted = 0;
+  const elements = [], disabled = []; let omitted = 0;
   for (const e of document.querySelectorAll(selector)) {
     if (elements.length >= 250) { omitted++; continue; } // Jev accepts at most 255 choices per question
     if (['file', 'hidden'].includes(e.type)) continue;
-    if (!visible(e) || e.matches(':disabled') || e.closest('[aria-disabled="true"]')) continue;
+    if (!visible(e)) continue;
     const r = e.getBoundingClientRect(), kind = role(e);
+    if (e.matches(':disabled') || e.closest('[aria-disabled="true"]')) { // not offered, but noted: see busySigns
+      if (kind) disabled.push(identity(e));
+      continue;
+    }
     if (!kind || !r.width || !r.height) continue;
     if (r.bottom + scrollY <= 0 || r.right + scrollX <= 0) continue; // placed off the page, like a skip link
     const cx = r.x + r.width / 2, cy = r.y + r.height / 2;
@@ -125,6 +130,11 @@ const SNAPSHOT = `(() => {
     }
     elements.push(item);
   }
+  // Signs, seen from inside the page, that it is still working (more are added in busySigns). A
+  // progress bar with a value is a meter or a wizard's step count; only one without is a spinner.
+  const signs = [];
+  if ([...document.querySelectorAll('[aria-busy="true"]')].some(visible)) signs.push('aria-busy');
+  if ([...document.querySelectorAll('progress:not([value]),[role="progressbar"]:not([aria-valuenow])')].some(visible)) signs.push('loading indicator');
   const words = [], walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
   const range = document.createRange(); let node, length = 0;
   while ((node = walker.nextNode()) && length < 5000) {
@@ -133,7 +143,7 @@ const SNAPSHOT = `(() => {
     range.selectNodeContents(node); const r = range.getBoundingClientRect();
     if (r.width && r.height) { words.push(value); length += value.length; }
   }
-  return { url: location.href, title: document.title, text: words.join('\\n').slice(0, 5000), elements, omitted,
+  return { url: location.href, title: document.title, text: words.join('\\n').slice(0, 5000), elements, omitted, signs, disabled,
     viewport: { w: innerWidth, h: innerHeight, x: scrollX, y: scrollY } };
 })()`;
 
@@ -173,8 +183,63 @@ const LOCATE = `((id, note, coordinates = true) => {
 
 export { SNAPSHOT, LOCATE };
 
-/** What a page looks like for change detection: the same fingerprint means nothing happened. */
-export const fingerprint = page => JSON.stringify([page.url, page.text, page.elements.map(e => [e.node, e.value, e.checked, e.expanded])]);
+/** What a page looks like for change detection: the same fingerprint means nothing happened. A spinner going away counts. */
+export const fingerprint = page => JSON.stringify([page.url, page.text, page.elements.map(e => [e.node, e.value, e.checked, e.expanded]), page.signs, page.disabled]);
+
+const bare = url => url?.split("#")[0]; // apps keep view state in the #hash; it is not another page
+
+/**
+ * page.busy: facts that say the page is not finished, for Jev to choose WAIT on. The snapshot's
+ * own (aria-busy, an indeterminate progress bar), a blank page, and a submit in flight: the control
+ * the last action clicked is disabled now, on the same URL, and nothing else on the page changed.
+ * That last part keeps out a wizard's next step whose Next stays disabled until it is answered.
+ * Network activity is not a sign: observe() waits for it, for at most a second, so that a page that
+ * polls cannot keep the run waiting.
+ */
+export function busySigns(page, { before, acted } = {}) {
+  const signs = [...(page.signs ?? [])];
+  if (!page.text.trim() && !page.elements.length) signs.push("the page is blank");
+  if (acted && before && bare(before.url) === bare(page.url) && page.disabled?.includes(acted.node)) {
+    const rest = p => JSON.stringify(p.elements.filter(e => e.node !== acted.node).map(e => [e.node, e.value, e.checked, e.expanded]));
+    if (rest(page) === rest(before)) signs.push(`${acted.role} "${acted.label}" was clicked and is now disabled`);
+  }
+  return signs;
+}
+
+/**
+ * Record whether actions changed the page. The last action is compared with every look; while
+ * only WAITs follow an action, it is re-marked too, so a submit that lands during a WAIT counts as
+ * having worked instead of keeping the `false` of the look taken too early. A miss ran nothing.
+ */
+export function markChanged(history, page) {
+  const now = fingerprint(page), last = history.at(-1);
+  if (last && !last.missed) last.page_changed = last.fingerprint !== now;
+  const action = history.findLast(h => h.operation !== "WAIT");
+  if (last?.operation === "WAIT" && action && !action.missed) action.page_changed ||= action.fingerprint !== now;
+}
+
+export const WAIT_LIMIT = 4;
+
+/** How long a WAIT may wait for the page to change: 1s, then 2s, then 4s for each WAIT in a row. */
+export function waitPause(history) {
+  const waits = history.length - 1 - history.findLastIndex(h => h.operation !== "WAIT");
+  return 1000 * 2 ** Math.min(waits, 2);
+}
+
+/**
+ * Why the run is stuck, or "" if it is not: the last three actions left the page unchanged, or
+ * WAIT_LIMIT WAITs in a row (about 11s with waitPause) saw no change. A missed action ran nothing
+ * and an unchanged WAIT is patience, so neither counts toward the three.
+ */
+export function stuck(history) {
+  const unchangedWait = h => h.operation === "WAIT" && h.page_changed === false;
+  const acts = history.filter(h => !h.missed);
+  let waits = 0;
+  while (waits < acts.length && unchangedWait(acts.at(-1 - waits))) waits++;
+  if (waits >= WAIT_LIMIT) return `${waits} WAITs in a row saw no change`;
+  const last = acts.filter(h => !unchangedWait(h)).slice(-3);
+  return last.length === 3 && last.every(h => h.page_changed === false) ? "the last 3 actions changed nothing" : "";
+}
 
 /** Reject anything outside the offered set. Nothing executes on an invalid answer. */
 export function pick(answer, offered) {
@@ -202,7 +267,6 @@ export function buildRequest({ goal, page, texts = [], secret = "", history = []
   // Jev is stateless, so it can keep picking the same best-looking target. A click already tried
   // twice on this page is not offered again, which forces it onto another route. The #hash is
   // ignored: apps keep view state there, so it changes with every click.
-  const bare = url => url?.split("#")[0];
   const tried = {};
   for (const h of history) if (h.operation === "CLICK" && bare(h.url) === bare(page.url)) tried[h.target] = (tried[h.target] || 0) + 1;
   // A link back to a page already seen in this run is a step backwards, not a new route. Clicked
@@ -240,7 +304,8 @@ export function buildRequest({ goal, page, texts = [], secret = "", history = []
     };
   }
   const state = {
-    page: { url: page.url, title: page.title, text: page.text },
+    // busy is left out when empty: an explicit empty list reads as "finished", even on a blank page
+    page: { url: page.url, title: page.title, text: page.text, ...(page.busy?.length ? { busy: page.busy } : {}) },
     elements: page.elements.map(({ node, op, options, rect, search, href, ...rest }) => // node ids and geometry stay with the code
       ({ ...rest, operation: op === "SECRET" ? "TYPE" : op, ...(options ? { options: options.map(o => o.label) } : {}) })),
     text_values: texts,

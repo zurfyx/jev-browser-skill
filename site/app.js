@@ -1,6 +1,6 @@
 // The explainer. Replay mode steps through a --trace file. Live mode runs the same loop as the
 // skill inside a sandboxed iframe, using scripts/core.mjs unchanged and /api/jev for the request.
-import { SNAPSHOT, LOCATE, OPERATIONS, decide, fingerprint } from "/scripts/core.mjs";
+import { SNAPSHOT, LOCATE, OPERATIONS, busySigns, decide, fingerprint, markChanged } from "/scripts/core.mjs";
 import { samples } from "/site/samples.js";
 
 const $ = id => document.getElementById(id);
@@ -249,7 +249,8 @@ async function askLive() {
   $("ask").disabled = true; $("status").textContent = "Observing the page and asking Jev…";
   try {
     const page = inPage(SNAPSHOT);
-    if (live.history.length) live.history.at(-1).page_changed = live.history.at(-1).fingerprint !== fingerprint(page);
+    page.busy = busySigns(page, live.lastClick); // the CLI also waits for the network; the site cannot see it
+    markChanged(live.history, page);
     const ask = async body => {
       const started = performance.now();
       const res = await fetch("/api/jev", { method: "POST", headers: { "content-type": "application/json", "x-typesafe-key": key }, body: JSON.stringify(body) });
@@ -287,6 +288,7 @@ async function executeLive() {
       const node = live.lastTyped; node?.dispatchEvent(new w.KeyboardEvent("keydown", { key: "Enter", bubbles: true })); node?.form?.requestSubmit();
     }
     live.history.push({ operation: d.operation, target: d.e && `${d.e.role} "${d.e.label}"`, text: d.secret ? "••••••" : d.text, url: live.page.url, href: d.e?.href, fingerprint: fingerprint(live.page) });
+    if (d.operation !== "WAIT") live.lastClick = d.operation === "CLICK" ? { before: live.page, acted: d.e } : {};
     await new Promise(r => setTimeout(r, 500));
     $("ask").disabled = false; $("status").textContent = "Executed by the skill. Ask Jev for the next step.";
     return "ok";

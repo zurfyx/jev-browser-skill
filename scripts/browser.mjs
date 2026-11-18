@@ -11,6 +11,8 @@ import { SNAPSHOT, LOCATE, fingerprint } from "./core.mjs";
 
 export const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+const QUIET_MS = 300; // see observe()
+const TRACKED = new Set(["Document", "XHR", "Fetch"]); // see network()
 const HOME = homedir();
 const LOCAL = process.env.LOCALAPPDATA || join(HOME, "AppData", "Local");
 const OWN_PROFILE = process.env.JEV_PROFILE || join(HOME, ".jev-browser", "chrome");
@@ -126,6 +128,8 @@ class Chrome {
     this.headless = headless;
     this.pending = new Map();
     this.nextId = 1;
+    this.requests = new Map(); // requestId → when it started, for the loads network() counts
+    this.loaded = -Infinity;   // when the last of them finished
   }
 
   async connect(endpoint, { newTab = false } = {}) {
@@ -144,6 +148,8 @@ class Chrome {
         if (message.params.frameId === this.targetId) this.navigationStarted = performance.now();
       } else if (message.method === "Page.frameNavigated" ? !message.params.frame.parentId
         : message.method === "Page.frameStoppedLoading" && message.params.frameId === this.targetId) this.navigationEnded = performance.now();
+      else if (message.method === "Network.requestWillBeSent" && TRACKED.has(message.params.type)) this.requests.set(message.params.requestId, performance.now());
+      else if ((message.method === "Network.loadingFinished" || message.method === "Network.loadingFailed") && this.requests.delete(message.params.requestId)) this.loaded = performance.now();
       const waiter = this.pending.get(message.id);
       if (!waiter) return;
       this.pending.delete(message.id);
@@ -157,6 +163,7 @@ class Chrome {
     this.targetId = page.targetId;
     this.session = (await this.send("Target.attachToTarget", { targetId: page.targetId, flatten: true }, null)).sessionId;
     await this.send("Page.enable");
+    await this.send("Network.enable", { maxTotalBufferSize: 0, maxResourceBufferSize: 0 }); // events for network(), no bodies kept
     await this.send("Emulation.setFocusEmulationEnabled", { enabled: true }); // keep rendering if the tab is not in front
   }
 
@@ -226,9 +233,14 @@ class Chrome {
     await this.settle();
   }
 
-  /** Read the page, then read it again a beat later: act on a page that has stopped changing. */
+  /**
+   * Read the page, then read it again a beat later: act on a page that has stopped changing. A page
+   * that holds still while its data is still loading is often about to render it (an app paints a
+   * beat after its last response), so a still page also waits for the network to be quiet for
+   * QUIET_MS, but for at most a second: a page that polls cannot hold the run.
+   */
   async observe() {
-    let previous = null;
+    let previous = null, still = 0;
     // A page that never settles is observed as it is after 10s. One that has not answered at all
     // is busy, e.g. redrawing a chart, and gets up to 30s.
     const started = performance.now();
@@ -240,12 +252,28 @@ class Chrome {
     while (performance.now() < started + (previous ? 10000 : 30000)) {
       const page = await this.evaluate(SNAPSHOT);
       snapshots++;
-      if (page && previous && fingerprint(page) === fingerprint(previous)) return done(page, "settled");
+      if (page && previous && fingerprint(page) === fingerprint(previous)) {
+        still ||= performance.now();
+        const { requests, quietMs } = this.network();
+        if (!requests && quietMs >= QUIET_MS) return done(page, "settled");
+        if (performance.now() - still >= 1000) return done(page, `settled, ${requests} requests still loading`);
+      } else still = 0;
       previous = page;
       await sleep(page ? 120 : 100);
     }
     if (previous) return done(previous, "still changing");
     throw new Error("Page did not become readable");
+  }
+
+  /**
+   * Page and data requests still loading: the document, XHR and fetch, which is what an app waits
+   * on before it renders or answers a submit. Scripts, images, fonts, styles and pings are not
+   * counted, nor WebSocket or EventSource streams; anything older than 10s is a long poll, not
+   * loading, and is dropped. `quietMs` is how long ago the last one finished.
+   */
+  network() {
+    for (const [id, since] of this.requests) if (performance.now() - since > 10000) this.requests.delete(id);
+    return { requests: this.requests.size, quietMs: performance.now() - this.loaded };
   }
 
   async locate(node, note, coordinates = true) {

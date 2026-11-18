@@ -45,7 +45,7 @@ Here is the real third step of the video, on the Hacker News login page, after t
 }
 ```
 
-Only operations that are possible right now are offered, and each target head lists only the elements that operation makes sense on. `ENTER` appears because the previous action was `TYPE`; `SELECT` is absent because the page has no dropdown; `WAIT` is always on offer, for a page that is blank or still loading.
+Only operations that are possible right now are offered, and each target head lists only the elements that operation makes sense on. `ENTER` appears because the previous action was `TYPE`; `SELECT` is absent because the page has no dropdown; `WAIT` is always on offer, for a page that is blank or still loading. When the page is not finished, the state also carries `page.busy`: a blank page, `aria-busy`, a loading indicator (a progress bar with no value), or a button that was just clicked and is now disabled while nothing else on the page changed, which is a submit in flight (disabled controls are left out of the table, so it would otherwise just look like a missing button). Network activity is not reported: each observation already waits until no page or data request has been loading for 0.3s, for at most a second, so a page that polls cannot hold the run.
 
 **3. Jev answers every question at once.** A key from each dictionary, and the full distribution.
 

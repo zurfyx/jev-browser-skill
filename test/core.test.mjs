@@ -1,7 +1,7 @@
 // Pure-logic tests for the decision layer. No network, no browser, no dependencies.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRequest, readDecision, OPERATIONS } from "../scripts/core.mjs";
+import { buildRequest, readDecision, OPERATIONS, RULES, fingerprint, busySigns, markChanged, stuck, waitPause, WAIT_LIMIT } from "../scripts/core.mjs";
 
 // A page shaped like a login form: a text field, a password field, a button, a link.
 const loginPage = () => ({
@@ -171,4 +171,85 @@ test("every offered operation ships a description for Jev to choose on", () => {
     assert.ok(text.length > 10, `${op} needs a real description`);
   }
   assert.deepEqual(Object.keys(body.questions.operation.criteria), Object.keys(offered));
+});
+
+test("page.busy reaches Jev only when there is a sign; an empty list would read as finished", () => {
+  assert.ok(!("busy" in buildRequest({ ...base, page: { ...loginPage(), busy: [] } }).body.state.page));
+  const busy = { ...loginPage(), busy: ["aria-busy"] };
+  assert.deepEqual(buildRequest({ ...base, page: busy }).body.state.page.busy, ["aria-busy"]);
+  assert.ok(RULES.includes("page.busy"), "Jev is told what busy means");
+});
+
+test("busy signs: the snapshot's own and a blank page; a finished page has none", () => {
+  assert.deepEqual(busySigns(loginPage()), []);
+  assert.deepEqual(busySigns({ ...loginPage(), signs: ["aria-busy", "loading indicator"] }), ["aria-busy", "loading indicator"]);
+  assert.deepEqual(busySigns({ url: "https://example.com/", title: "", text: " ", elements: [] }), ["the page is blank"]);
+});
+
+// The login form after its button (node 3) was clicked: the button is now disabled, so the
+// table drops it; everything else is as it was.
+const submitting = () => ({ ...loginPage(), elements: loginPage().elements.filter(e => e.node !== 3), disabled: [3] });
+const clicked = loginPage().elements[2];
+
+test("the clicked control disabled, nothing else changed: a submit in flight", () => {
+  assert.deepEqual(busySigns(submitting(), { before: loginPage(), acted: clicked }), ['button "log in" was clicked and is now disabled']);
+});
+
+test("a disabled control is no sign when it was not the one clicked, or was disabled all along", () => {
+  // two "Add to cart" buttons and a third that is always disabled; one enabled one was clicked
+  const cart = disabled => ({ url: "https://example.com/shop", title: "Shop", text: "Shop", disabled,
+    elements: [{ node: 1, role: "button", label: "Add to cart", op: "CLICK" }, { node: 2, role: "button", label: "Add to cart", op: "CLICK" }] });
+  assert.deepEqual(busySigns(cart([3]), { before: cart([3]), acted: cart([3]).elements[0] }), [], "only node 3, disabled all along");
+  assert.deepEqual(busySigns(submitting(), { before: loginPage() }), [], "no click to compare with");
+});
+
+test("a wizard's next step with its Next disabled until answered is not a submit in flight", () => {
+  const step2 = { ...loginPage(), text: "Step 2", disabled: [3],
+    elements: [{ node: 7, role: "radio", label: "Yes", checked: false, op: "CLICK" }, { node: 8, role: "radio", label: "No", checked: false, op: "CLICK" }] };
+  assert.deepEqual(busySigns(step2, { before: loginPage(), acted: clicked }), [], "the rest of the page changed");
+  assert.deepEqual(busySigns({ ...submitting(), url: "https://example.com/next" }, { before: loginPage(), acted: clicked }), [], "another page");
+});
+
+test("a spinner going away or a button re-enabling is a page change", () => {
+  assert.notEqual(fingerprint({ ...loginPage(), signs: ["aria-busy"] }), fingerprint({ ...loginPage(), signs: [] }));
+  assert.notEqual(fingerprint({ ...loginPage(), disabled: [3] }), fingerprint({ ...loginPage(), disabled: [] }));
+});
+
+test("a click that lands during a WAIT is re-marked as having changed the page", () => {
+  // what the loop does: look, decide, push the action with the fingerprint it was taken on
+  const history = [], form = loginPage(), landed = { ...loginPage(), text: "Welcome" };
+  history.push({ operation: "CLICK", fingerprint: fingerprint(form) });
+  markChanged(history, form); // looked too early: the submit has not landed
+  assert.equal(history[0].page_changed, false);
+  history.push({ operation: "WAIT", fingerprint: fingerprint(form) }); // Jev waited
+  markChanged(history, landed);
+  assert.equal(history[1].page_changed, true, "the WAIT saw the change");
+  assert.equal(history[0].page_changed, true, "and so did the click it waited on");
+  assert.equal(stuck([{ operation: "CLICK", page_changed: false }, { operation: "CLICK", page_changed: false }, ...history]), "");
+});
+
+test("a missed click stays unchanged, whatever the page did meanwhile", () => {
+  const history = [{ operation: "CLICK", fingerprint: fingerprint(loginPage()), page_changed: false, missed: true }];
+  markChanged(history, { ...loginPage(), text: "Welcome" });
+  assert.equal(history[0].page_changed, false);
+  history.push({ operation: "WAIT", fingerprint: fingerprint(loginPage()) });
+  markChanged(history, { ...loginPage(), text: "Welcome" });
+  assert.equal(history[0].page_changed, false, "not re-marked through a WAIT either");
+  assert.doesNotThrow(() => markChanged([], loginPage()), "nothing to mark before the first action");
+});
+
+test("stuck says why: three unchanged actions, or too many unchanged WAITs; misses do not count", () => {
+  const click = (page_changed, extra) => ({ operation: "CLICK", page_changed, ...extra });
+  const wait = page_changed => ({ operation: "WAIT", page_changed });
+  assert.equal(stuck([click(false), click(false), click(false)]), "the last 3 actions changed nothing");
+  assert.equal(stuck([click(false), click(false), click(false, { missed: true })]), "", "a skipped click is not the page ignoring us");
+  assert.equal(stuck([click(true), wait(false), wait(false), wait(false)]), "", "a slow submit: the WAITs are patience");
+  assert.equal(stuck([click(false), wait(true), click(false), click(false)]), "", "a WAIT that saw the page change breaks the run");
+  assert.equal(stuck([click(true), ...Array.from({ length: WAIT_LIMIT }, () => wait(false))]), `${WAIT_LIMIT} WAITs in a row saw no change`);
+});
+
+test("a WAIT may wait 1s, then 2s, then 4s for the page to change", () => {
+  const waits = n => [{ operation: "CLICK" }, ...Array.from({ length: n }, () => ({ operation: "WAIT" }))];
+  assert.deepEqual([0, 1, 2, 3].map(n => waitPause(waits(n))), [1000, 2000, 4000, 4000]);
+  assert.equal(waitPause([]), 1000, "a WAIT on the first page");
 });
