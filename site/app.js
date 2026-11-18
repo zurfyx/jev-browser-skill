@@ -197,7 +197,7 @@ function show(i, fromPlayer = false) {
   renderSteps(steps, current, show);
   $("prev").disabled = current === 0; $("next").disabled = current === steps.length - 1;
   const s = steps[current];
-  $("replay-goal").innerHTML = `<b>Goal</b> ${esc(trace.goal)}`;
+  $("replay-goal").innerHTML = s.goal ? `<b>Goal ${s.goal}/${trace.goals.length}</b> ${esc(trace.goals[s.goal - 1])}` : `<b>Goal</b> ${esc(trace.goal)}`; // a goal sequence numbers its steps' goals
   const note = trace.notes?.[current];
   const tail = current === steps.length - 1 && trace.result ? ` Finished: ${trace.result.status} in ${trace.result.seconds}s, ${trace.result.jev_seconds}s of it inside Jev.`
     : s.executed === false ? " Not executed: the page changed first, so it was observed again." : "";

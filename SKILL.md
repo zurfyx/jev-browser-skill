@@ -29,13 +29,17 @@ from https://typesafe.ai — and do not try to work around it.
   looks like on screen ("Done when search results are visible"). If the exact thing may not
   exist on the site, say what is acceptable instead ("a 10-year chart, or All if there is no
   10Y range"); Jev only answers DONE on visible evidence, so it stops at a near miss.
+- **Several `--goal`s** for a long task such as a multi-step form: one short goal per page or
+  step, in order, each ending with what "done" looks like. When Jev answers DONE, the next goal
+  starts on the same page with a fresh history; BLOCKED, a stuck loop or `--max-steps` ends the
+  whole run.
 - **`--text`**: Jev chooses, it never generates. Pass every string the task needs typed, one
   `--text` each: search queries, names, form values. Extract them from the user's request.
   Jev decides which value goes in which field. With no `--text`, typing is not offered.
 - **`--url`**: start as close to the task as you can (the site itself, not a search engine).
 - `--screenshot out.png` saves the final page; `--headless` hides the window; `--close` closes
   the tab or window at the end (by default it stays open so the user can see the result);
-  `--max-steps N` caps actions (default 100).
+  `--max-steps N` caps actions per goal (default 100).
 - `--browser`: `auto` (default) uses the user's own browser when it allows remote debugging,
   else a dedicated Jev window that is reused across runs. `yours` and `own` force either.
 
@@ -61,7 +65,10 @@ A `skipped:` line under a step means its target was covered or off screen, so no
 Jev sees the miss and picks something else.
 
 Then a JSON summary: `status` (`done`, `blocked`, `max_steps`), `steps`, `seconds`,
-`jev_seconds`, final `url`, `title` and visible `page_text`. Answer the user's question from
+`jev_seconds`, final `url`, `title` and visible `page_text`. With several goals it adds `goals`
+(goal text, `status` and `steps` for each goal the run reached) and, unless it ended `done`,
+`failed_goal` (its number). `steps` counts actions; the log numbers every decision, so a DONE
+that ends a goal has a number there but is not counted. Answer the user's question from
 `page_text` (or the screenshot). Exit code is 0 only for `done`.
 
 If the status is `blocked`, read the step log, then retry once with a more explicit goal or a
