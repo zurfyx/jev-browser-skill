@@ -12,7 +12,7 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
-import { decide, fingerprint } from "./core.mjs";
+import { decide, fingerprint, targetName } from "./core.mjs";
 import { Chrome, sleep } from "./browser.mjs";
 
 const API = "https://api.typesafe.ai/v1/systemone";
@@ -109,7 +109,7 @@ async function main() {
       modelMs += decision.ms;
       const { operation, e, option, text } = decision;
       const shown = decision.secret ? "••••••" : text;
-      const label = e ? `${e.role} "${e.label}"` + (option ? ` → "${option.label}"` : "") + (text ? ` ← "${shown}"` : "") : "";
+      const label = e ? targetName(e) + (option ? ` → "${option.label}"` : "") + (text ? ` ← "${shown}"` : "") : "";
       console.log(`${String(trace.steps.length + 1).padStart(2)}  ${operation.padEnd(11)} ${label.padEnd(58).slice(0, 58)}  p=${decision.p.toFixed(2)}  ${String(decision.ms).padStart(4)}ms  +${(elapsed() / 1000).toFixed(1)}s`);
       if (process.env.JEV_DEBUG) {
         console.error("   ops: " + top(decision.probabilities.operation));
@@ -117,7 +117,7 @@ async function main() {
       }
       trace.steps.push({
         elapsed_ms: elapsed(), page: { ...page, screenshot }, calls: decision.calls,
-        decision: { operation, target: e && `[${e.index}] ${e.role} "${e.label}"`, option: option?.label, text: shown, p: decision.p, probabilities: decision.probabilities, ms: decision.ms },
+        decision: { operation, target: e && `[${e.index}] ${targetName(e)}`, option: option?.label, text: shown, p: decision.p, probabilities: decision.probabilities, ms: decision.ms },
       });
       if (operation === "DONE" || operation === "BLOCKED") { status = operation.toLowerCase(); break; }
 
@@ -133,7 +133,7 @@ async function main() {
         if (!point) { // still not actionable: record the miss so Jev sees it and the target stops being offered
           trace.steps.at(-1).executed = false;
           console.log("   skipped: the target was covered or off screen, so nothing was clicked");
-          history.push({ operation, target: `${e.role} "${e.label}"`, text: shown, url: page.url, fingerprint: fingerprint(page), page_changed: false, missed: true });
+          history.push({ operation, target: targetName(e), text: shown, url: page.url, fingerprint: fingerprint(page), page_changed: false, missed: true });
           continue;
         }
         if (!args.headless) { // the highlight pause is long enough for a busy page to reflow
@@ -148,7 +148,7 @@ async function main() {
       else await sleep(250); // WAIT: give the page a moment, then observe again
       trace.steps.at(-1).executed = true;
 
-      history.push({ operation, target: e && `${e.role} "${e.label}"`, text: shown, url: page.url, href: e?.href, fingerprint: fingerprint(page) });
+      history.push({ operation, target: e && targetName(e), text: shown, url: page.url, href: e?.href, fingerprint: fingerprint(page) });
       if (acted) await chrome.react(page, acted, e?.href);
       await chrome.settle();
     }

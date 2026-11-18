@@ -1,7 +1,7 @@
 // Pure-logic tests for the decision layer. No network, no browser, no dependencies.
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildRequest, readDecision, OPERATIONS } from "../scripts/core.mjs";
+import { buildRequest, readDecision, OPERATIONS, describe } from "../scripts/core.mjs";
 
 // A page shaped like a login form: a text field, a password field, a button, a link.
 const loginPage = () => ({
@@ -171,4 +171,39 @@ test("every offered operation ships a description for Jev to choose on", () => {
     assert.ok(text.length > 10, `${op} needs a real description`);
   }
   assert.deepEqual(Object.keys(body.questions.operation.criteria), Object.keys(offered));
+});
+
+// Two yes/no questions, as a form asks them: the labels repeat, only the question differs.
+const twoQuestions = () => ({
+  url: "https://example.com/form", title: "Form", text: "Own a home there? Yes No Family there? Yes No",
+  elements: [
+    { node: 1, role: "radio", label: "No", group: "Own a home there?", checked: false, op: "CLICK" },
+    { node: 2, role: "radio", label: "No", group: "Family there?", checked: false, op: "CLICK" },
+    { node: 3, role: "button", label: "Next", op: "CLICK" },
+  ],
+});
+
+test("a repeated choice is described with the question it answers", () => {
+  const sent = buildRequest({ ...base, page: twoQuestions() }).body.questions.click_target.criteria;
+  assert.equal(sent["1"].element, '[1] radio "No" for "Own a home there?"');
+  assert.equal(sent["2"].element, '[2] radio "No" for "Family there?"');
+  assert.equal(describe({ index: "3", role: "button", label: "Next" }).element, '[3] button "Next"', "other controls unchanged");
+});
+
+test("a repeated label is counted per question when a click was tried twice", () => {
+  const click = { operation: "CLICK", target: 'radio "No" for "Own a home there?"', url: "https://example.com/form" };
+  const offered = Object.keys(buildRequest({ ...base, page: twoQuestions(), history: [click, click] }).targets.CLICK);
+  assert.ok(!offered.includes("1"), "the first question's No was tried twice");
+  assert.ok(offered.includes("2"), "the second question's No is a different control");
+});
+
+test("the question is dropped where it does not tell controls apart", () => {
+  const page = { url: "https://example.com/list", title: "List", text: "Name", elements: [
+    { node: 1, role: "checkbox", label: "Remember me", group: "Password", op: "CLICK" }, // unique label
+    { node: 2, role: "checkbox", label: "Select row", group: "Name", op: "CLICK" },     // one heading for every row
+    { node: 3, role: "checkbox", label: "Select row", group: "Name", op: "CLICK" },
+  ] };
+  const sent = buildRequest({ ...base, page }).body;
+  assert.deepEqual(sent.state.elements.map(e => e.group), [undefined, undefined, undefined]);
+  assert.equal(sent.questions.click_target.criteria["1"].element, '[1] checkbox "Remember me"');
 });
